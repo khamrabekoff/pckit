@@ -936,7 +936,7 @@ $gameFilter = New-Object System.Windows.Forms.ComboBox
 $gameFilter.DropDownStyle = 'DropDownList'
 $gameFilter.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $gameFilter.Size = New-Object System.Drawing.Size(200, 24)
-[void]$gameFilter.Items.AddRange(@('Все настройки', 'Подобрано под мой ПК', 'Ещё не включено', 'Мифы и плацебо'))
+[void]$gameFilter.Items.AddRange(@('Все настройки', 'Подобрано под мой ПК', 'Ещё не включено', 'На свой риск', 'Мифы и плацебо'))
 $gameFilter.SelectedIndex = 0
 $gameFilter.AccessibleName = 'Показать'
 $gameTop.Controls.Add($gameFilter)
@@ -2066,9 +2066,10 @@ function Update-GameFilter {
             $state = [string]$item.SubItems[3].Text
             $show = switch ($mode) {
                 'Подобрано под мой ПК' { [bool]$item.Text.StartsWith('★') }
-                'Ещё не включено' { -not $a.myth -and $state -in 'выключено', 'частично' }
+                'Ещё не включено' { -not $a.myth -and -not $a.danger -and $state -in 'выключено', 'частично' }
+                'На свой риск' { [bool]$a.danger }
                 'Мифы и плацебо' { [bool]$a.myth }
-                default { -not $a.myth }
+                default { -not $a.myth -and -not $a.danger }
             }
             if ($show -and $q) {
                 $hay = ('{0} {1} {2} {3}' -f $a.title, $a.what, $a.group, $item.SubItems[1].Text)
@@ -2088,7 +2089,7 @@ function Update-GameFilter {
 }
 
 # порядок разделов: сначала самое заметное для игры
-$script:GameGroupOrder = @('Видеокарта', 'CS2', 'Работа', 'Питание', 'Игровой режим', 'Планировщик', 'Ввод', 'Графика', 'Сеть', 'Фон', 'Исправления', 'Удобство', 'Конфиденциальность', 'Службы и задачи', 'Мифы')
+$script:GameGroupOrder = @('Видеокарта', 'CS2', 'Работа', 'Питание', 'Игровой режим', 'Планировщик', 'Ввод', 'Графика', 'Сеть', 'Фон', 'Исправления', 'Удобство', 'Конфиденциальность', 'Службы и задачи', 'На свой риск', 'Мифы')
 
 function Initialize-GameTab {
     $script:Actions = @(Get-PckitActions -Directory (Join-Path $script:Root 'data'))
@@ -2116,6 +2117,7 @@ function Initialize-GameTab {
     foreach ($a in $script:Actions) {
         $titleText = [string]$a.title
         if ($a.myth) { $titleText = 'Миф: ' + $titleText }
+        elseif ($a.danger) { $titleText = '⛔ ' + $titleText }
         elseif ($a.expert) { $titleText = '⚠ ' + $titleText }
         $adv = Get-PckitSmartAdvice -Action $a -Hw $hw
         if ($adv.Recommended -and -not $a.myth) { $titleText = '★ ' + $titleText }
@@ -3934,10 +3936,12 @@ $gamePresetButton.Add_Click({
 $gameApplyButton.Add_Click({
         $ids = @()
         $expertTitles = @()
+        $dangerTitles = @()
         foreach ($item in $script:GameItems) {
             if (-not $item.Checked) { continue }
             $ids += [string]$item.Tag.id
-            if ($item.Tag.expert) { $expertTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
+            if ($item.Tag.danger) { $dangerTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
+            elseif ($item.Tag.expert) { $expertTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
         }
         if (-not $ids.Count) {
             [void][System.Windows.Forms.MessageBox]::Show('Отметьте хотя бы одно действие.', 'pckit by odilbek',
@@ -3951,6 +3955,14 @@ $gameApplyButton.Add_Click({
                 ("Отмечены экспертные настройки — они отключают службы и задачи Windows:`r`n`r`n" + ($expertTitles -join "`r`n") +
                     "`r`n`r`nРеальный выигрыш небольшой, а часть функций Windows перестанет работать. Всё отменяется кнопкой «Отменить изменения». Продолжить?"),
                 'pckit by odilbek — эксперт', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning,
+                [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+            if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+        }
+        if ($run -and $dangerTitles.Count) {
+            $warn = [System.Windows.Forms.MessageBox]::Show(
+                ("НА СВОЙ СТРАХ И РИСК. Эти настройки не проверены как полезные и могут сломать часть Windows:`r`n`r`n" + ($dangerTitles -join "`r`n") +
+                    "`r`n`r`nПрирост не гарантирован, на части ПК будет хуже. Применяйте по одной, проверяйте FPS и стабильность, при проблемах — «Отменить изменения». Точно продолжить?"),
+                'pckit by odilbek — на свой риск', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Stop,
                 [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
             if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
         }

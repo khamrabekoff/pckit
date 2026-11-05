@@ -65,6 +65,7 @@ function Get-PckitSmartAdvice {
     $rec = (-not $Action.expert) -and ([string]$Action.effectLevel -in 'высокий', 'средний')
     $reason = if ($rec) { 'подходит вашему ПК' } else { 'по желанию' }
     if ($Action.expert) { $reason = 'экспертная настройка — по желанию' }
+    if ($Action.danger) { $rec = $false; $reason = 'на свой страх и риск — для тестов' }
 
     if ($Action.boostIf -and (Test-PckitHwCondition -Cond $Action.boostIf -Hw $Hw)) {
         $rec = $true

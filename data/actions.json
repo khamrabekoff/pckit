@@ -1287,16 +1287,221 @@
     ]
   },
   {
-    "id": "myth.kernel.tweaks",
-    "group": "Мифы",
-    "expert": true,
-    "myth": true,
-    "title": "Скрытые параметры ядра, csrss «High», SystemPages, DisablePagingExecutive",
-    "what": "Набор недокументированных ключей Session Manager\\kernel, повышенный приоритет csrss.exe и старые настройки памяти из эпохи 32-битных систем.",
-    "effect": "Измеримой пользы на Windows 10/11 нет; часть ключей ядро просто игнорирует. pckit такое не пишет.",
-    "effectLevel": "плацебо",
+    "id": "risk.nv.hdcp.off",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "requires": { "gpu": "nvidia" },
+    "title": "NVIDIA: выключить HDCP",
+    "what": "Драйвер перестаёт поддерживать защиту контента HDCP 2.2.",
+    "effect": "Иногда убирает редкие подвисания при смене режима экрана. Цена: Netflix, Blu-ray и часть стримингов перестанут показывать видео в высоком качестве или вообще.",
+    "effectLevel": "низкий",
+    "risk": "high",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RmDisableHdcp22", "value": 1 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RMHdcpKeyglobZero", "value": 1 }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RmDisableHdcp22", "value": 1 }
+    ]
+  },
+  {
+    "id": "risk.gpu.preemption.off",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "requires": { "gpu": "nvidia" },
+    "title": "Видеокарта: выключить вытеснение задач (preemption)",
+    "what": "Видеокарта не прерывает текущую работу ради другой задачи (рабочий стол, браузер, запись).",
+    "effect": "Теоретически чуть меньше задержка кадра в игре. На практике бывают зависания экрана и сбросы драйвера (TDR), особенно при записи, стриме или втором мониторе.",
+    "effectLevel": "низкий",
+    "risk": "high",
+    "needs": "admin",
+    "note": "Действует после перезагрузки. При чёрном экране или зависаниях — сразу откатить.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Parameters", "name": "DisablePreemption", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Parameters", "name": "DisableCudaContextPreemption", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers\\Scheduler", "name": "EnablePreemption", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\nvlddmkm\\Parameters", "name": "DisablePreemption", "value": 1 }
+    ]
+  },
+  {
+    "id": "risk.gpu.affinity",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "requires": { "gpu": "nvidia" },
+    "title": "Прерывания видеокарты — на ядро №3",
+    "what": "Windows будет обрабатывать прерывания видеокарты только на третьем ядре процессора, а не там, где решит сама.",
+    "effect": "На части процессоров ровнее время кадра, если игра живёт на первых ядрах. На других — хуже: ядро с прерываниями может совпасть с игровым потоком. Проверяйте замером FPS.",
+    "effectLevel": "низкий",
+    "risk": "high",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "devreg", "target": "pcidisplay", "vendor": "NVIDIA", "sub": "Interrupt Management\\Affinity Policy", "name": "DevicePolicy", "value": 4 },
+      { "type": "devreg", "target": "pcidisplay", "vendor": "NVIDIA", "sub": "Interrupt Management\\Affinity Policy", "name": "AssignmentSetOverride", "value": [4, 0, 0, 0, 0, 0, 0, 0], "valueType": "Binary" }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "pcidisplay", "vendor": "NVIDIA", "sub": "Interrupt Management\\Affinity Policy", "name": "DevicePolicy", "value": 4 }
+    ]
+  },
+  {
+    "id": "risk.kernel.timers",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Ядро: таймеры и приоритет csrss",
+    "what": "Глобальные запросы точности таймера, последовательная обработка таймеров, DPC в потоках и высокий приоритет процесса csrss.exe (ввод и окна).",
+    "effect": "Часть геймеров отмечает «отзывчивее мышь». Измеримой пользы на Windows 10/11 обычно нет, часть ключей недокументирована. Возможен рост нагрузки в простое.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel", "name": "GlobalTimerResolutionRequests", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel", "name": "SerializeTimerExpiration", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel", "name": "ThreadDpcEnable", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\csrss.exe\\PerfOptions", "name": "CpuPriorityClass", "value": 4, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\csrss.exe\\PerfOptions", "name": "IoPriority", "value": 3, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\kernel", "name": "GlobalTimerResolutionRequests", "value": 1 }
+    ]
+  },
+  {
+    "id": "risk.memory.kernel",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Память: ядро всегда в ОЗУ, без объединения страниц",
+    "what": "Код ядра и драйверов не выгружается в файл подкачки; Windows перестаёт искать одинаковые страницы памяти.",
+    "effect": "Чуть стабильнее отклик при нехватке памяти. Цена: больше занятой ОЗУ. На 16+ ГБ разницы обычно не видно.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management", "name": "DisablePagingExecutive", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management", "name": "DisablePageCombining", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management", "name": "DisablePagingExecutive", "value": 1 }
+    ]
+  },
+  {
+    "id": "risk.prefetch.off",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Выключить Prefetch и Superfetch",
+    "what": "Windows перестаёт заранее подгружать часто запускаемые программы в память.",
+    "effect": "Меньше фоновой работы диска сразу после включения ПК. Цена: программы и игры с SSD чуть дольше запускаются, с HDD — заметно дольше.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters", "name": "EnablePrefetcher", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters", "name": "EnableSuperfetch", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Session Manager\\Memory Management\\PrefetchParameters", "name": "EnablePrefetcher", "value": 0 }
+    ]
+  },
+  {
+    "id": "risk.tcp.iface",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "TCP: подтверждать каждый пакет сразу",
+    "what": "На всех физических сетевых картах: подтверждение каждого TCP-пакета без задержки и без склейки мелких пакетов.",
+    "effect": "Влияет только на TCP (браузер, лаунчеры, некоторые игры). CS2 играет по UDP — на пинг в матче не влияет. Чуть больше служебного трафика.",
+    "effectLevel": "низкий",
     "risk": "low",
-    "needs": "none"
+    "needs": "admin",
+    "steps": [
+      { "type": "devreg", "target": "tcpif", "name": "TcpAckFrequency", "value": 1 },
+      { "type": "devreg", "target": "tcpif", "name": "TCPNoDelay", "value": 1 }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "tcpif", "name": "TcpAckFrequency", "value": 1 }
+    ]
+  },
+  {
+    "id": "risk.netbt.off",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Выключить NetBIOS (NetBT и lmhosts)",
+    "what": "Отключает старый протокол имён локальной сети.",
+    "effect": "Меньше широковещательного трафика в локалке. Цена: могут пропасть сетевые папки, старые принтеры и NAS по имени.",
+    "effectLevel": "низкий",
+    "risk": "high",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "service", "name": "NetBT", "startType": "Disabled" },
+      { "type": "service", "name": "lmhosts", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "NetBT", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "risk.fso.global",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Выключить полноэкранную оптимизацию для всех игр",
+    "what": "Windows перестаёт подменять «настоящий» полноэкранный режим своим оконным.",
+    "effect": "В части старых игр меньше задержка вывода. В CS2 (DX11 + MPO) часто разницы нет, Alt+Tab становится медленнее, оверлеи Discord/Steam могут пропадать.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_FSEBehaviorMode", "value": 2, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_FSEBehavior", "value": 2, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_HonorUserFSEBehaviorMode", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_DXGIHonorFSEWindowsCompatible", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_FSEBehaviorMode", "value": 2 }
+    ]
+  },
+  {
+    "id": "risk.nvme.idle.off",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: SSD будет греться и тратить батарею",
+    "title": "NVMe SSD: не засыпать",
+    "what": "Встроенный драйвер NVMe перестаёт переводить SSD в режим простоя.",
+    "effect": "Иногда убирает короткую задержку при первом обращении к диску. Цена: SSD теплее, чуть больше потребление.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "Действует после перезагрузки. Только для стандартного драйвера stornvme.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device", "name": "IdlePowerMode", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\stornvme\\Parameters\\Device", "name": "IdlePowerMode", "value": 0 }
+    ]
+  },
+  {
+    "id": "risk.power.watchdog",
+    "group": "На свой риск",
+    "expert": true, "danger": true,
+    "title": "Выключить сторожевые таймеры питания",
+    "what": "Windows перестаёт следить за зависшими драйверами при сне, пробуждении и выключении монитора.",
+    "effect": "Пользы для fps нет, это убирает лишь редкие «синие экраны» по таймауту у кривых драйверов. Цена: вместо синего экрана ПК может просто зависнуть.",
+    "effectLevel": "плацебо",
+    "risk": "high",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogDrvSetMonitorTimeoutMsec", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogDwmSyncFlushTimeoutMsec", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogPoCalloutTimeoutMsec", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogPowerOnGdiTimeoutMsec", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogRequestQueueTimeoutMsec", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "PowerWatchdogPoCalloutTimeoutMsec", "value": 0 }
+    ]
   },
   {
     "id": "myth.qos.allgames",
@@ -1311,25 +1516,13 @@
     "needs": "none"
   },
   {
-    "id": "myth.affinity",
-    "group": "Мифы",
-    "expert": true,
-    "myth": true,
-    "title": "Жёсткая привязка видеокарты, сети и USB к ядрам",
-    "what": "Политика прерываний «на конкретные ядра» для каждого устройства.",
-    "effect": "Выигрыш зависит от конкретного процессора и часто отрицательный: ядро с прерываниями может совпасть с игровым потоком. pckit такое не делает.",
-    "effectLevel": "плацебо",
-    "risk": "low",
-    "needs": "none"
-  },
-  {
     "id": "myth.danger.optimizers",
     "group": "Мифы",
     "expert": true,
     "myth": true,
     "title": "Что оптимизаторы делают «заодно» и почему pckit так не делает",
-    "what": "Выключение HDCP и вытеснения на видеокарте, NetBT, автообновлений Windows и браузеров, запроса UAC на защищённом столе, длинных путей; перехват запуска Edge через Image File Execution Options; сотни «анти-телеметрийных» переменных среды (в том числе CI=1).",
-    "effect": "Ломает Netflix/Blu-ray, сетевые папки и принтеры, обновления безопасности, сборочные инструменты; ослабляет защиту. Прироста fps нет.",
+    "what": "Выключение Defender, UAC (и его защищённого стола), SmartScreen, VBS, защит процессора (Mitigations), автообновлений Windows и браузеров, длинных путей; правки загрузчика bcdedit; перехват запуска Edge через Image File Execution Options; сотни «анти-телеметрийных» переменных среды (в том числе CI=1).",
+    "effect": "Ослабляет защиту, мешает античитам и обновлениям безопасности, ломает сборочные инструменты. Прироста fps нет — поэтому этого нет даже в разделе «На свой риск».",
     "effectLevel": "плацебо",
     "risk": "high",
     "needs": "none"

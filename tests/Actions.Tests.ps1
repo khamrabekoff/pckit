@@ -66,6 +66,11 @@ try {
     $mr = Invoke-PckitAction -Action $mythAction -Journal (New-PckitJournal) -Run:$false
     Assert-That 'myth: Invoke даёт skip' ($mr.Results[0].Status -eq 'skip')
 
+    # «на свой риск»: всегда expert, никогда не рекомендуется и не попадает в «Всё сразу»
+    $hwT = Get-PckitHardwareProfile
+    $dBad = @($actions | Where-Object { $_.danger } | Where-Object { -not $_.expert -or $_.myth -or (Get-PckitSmartAdvice -Action $_ -Hw $hwT).Recommended } | ForEach-Object { $_.id })
+    Assert-That 'danger: expert, не миф, не рекомендуется' (@($actions | Where-Object { $_.danger }).Count -gt 0 -and $dBad.Count -eq 0) ($dBad -join ', ')
+
     # devreg: поиск устройств не падает и не даёт пустых путей; неизвестная цель — пусто и skip
     $devBad = @()
     foreach ($tg in 'display', 'net', 'tcpif', 'pcidisplay') {
