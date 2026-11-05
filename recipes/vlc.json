@@ -1,0 +1,14 @@
+{
+  "id": "vlc",
+  "title": "VLC media player",
+  "risk": "low",
+  "match": { "displayName": "^VLC media player", "winget": "VideoLAN.VLC" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\vlc",
+      "exclude": ["art", "cache", "*.log"],
+      "note": "настройки, плейлисты, горячие клавиши"
+    }
+  ]
+}

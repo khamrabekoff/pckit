@@ -1,0 +1,14 @@
+{
+  "id": "obsidian",
+  "title": "Obsidian",
+  "risk": "low",
+  "match": { "displayName": "^Obsidian", "winget": "Obsidian.Obsidian" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\obsidian",
+      "exclude": ["Cache", "Code Cache", "GPUCache", "*.log"],
+      "note": "список хранилищ и настройки; сами заметки лежат в папках хранилищ (проверьте их отдельно)"
+    }
+  ]
+}

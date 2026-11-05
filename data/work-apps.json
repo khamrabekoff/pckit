@@ -1,0 +1,69 @@
+[
+  {
+    "id": "adobe",
+    "title": "Adobe (Photoshop, Premiere, After Effects, Illustrator, Lightroom)",
+    "match": "^Adobe (Photoshop|Premiere|After Effects|Illustrator|Lightroom|Media Encoder|InDesign|Audition)",
+    "exes": [ "Photoshop.exe", "Adobe Premiere Pro.exe", "AfterFX.exe", "Illustrator.exe", "Lightroom.exe", "Adobe Media Encoder.exe", "InDesign.exe" ],
+    "caches": [
+      { "title": "Adobe: медиа-кэш (Premiere, After Effects, Media Encoder)", "path": "%APPDATA%\\Adobe\\Common\\Media Cache Files" },
+      { "title": "Adobe: база медиа-кэша", "path": "%APPDATA%\\Adobe\\Common\\Media Cache" },
+      { "title": "Adobe: звуковые волны (Peak Files)", "path": "%APPDATA%\\Adobe\\Common\\Peak Files" },
+      { "title": "Adobe Camera Raw / Lightroom: кэш превью RAW", "path": "%LOCALAPPDATA%\\Adobe\\CameraRaw\\Cache" }
+    ],
+    "reports": [],
+    "note": "Закройте программы Adobe перед чисткой — занятые файлы пропускаются."
+  },
+  {
+    "id": "autodesk",
+    "title": "Autodesk (AutoCAD, Revit, 3ds Max, Civil 3D)",
+    "match": "^(Autodesk )?(AutoCAD|Revit|3ds Max|Civil 3D|Inventor)",
+    "exes": [ "acad.exe", "Revit.exe", "3dsmax.exe", "Inventor.exe" ],
+    "caches": [
+      { "title": "Revit: кэш семейств и библиотек (PacCache)", "path": "%LOCALAPPDATA%\\Autodesk\\Revit\\PacCache" }
+    ],
+    "reports": [
+      { "title": "Revit: журналы работы (Journals)", "path": "%LOCALAPPDATA%\\Autodesk\\Revit", "dirName": "Journals", "what": "Логи каждого запуска Revit. Нужны только для разбора сбоев — обычно их можно удалить, когда Revit закрыт." },
+      { "title": "Revit: локальный кэш совместной работы (CollaborationCache)", "path": "%LOCALAPPDATA%\\Autodesk\\Revit", "dirName": "CollaborationCache", "what": "Копии облачных моделей. Удалять ТОЛЬКО когда все изменения синхронизированы с облаком." }
+    ],
+    "note": "Резервные копии проектов Revit (*.0001.rvt) лежат рядом с проектами — их программа не ищет и не удаляет."
+  },
+  {
+    "id": "office",
+    "title": "Microsoft Office / Teams",
+    "match": "^Microsoft (Office|365|Teams)|^Microsoft Teams",
+    "exes": [],
+    "caches": [
+      { "title": "Teams (классический): кэш", "path": "%APPDATA%\\Microsoft\\Teams\\Cache" },
+      { "title": "Teams (классический): кэш кода", "path": "%APPDATA%\\Microsoft\\Teams\\Code Cache" },
+      { "title": "Teams (классический): кэш видеокарты", "path": "%APPDATA%\\Microsoft\\Teams\\GPUCache" }
+    ],
+    "reports": [
+      { "title": "Office: кэш документов (OfficeFileCache)", "path": "%LOCALAPPDATA%\\Microsoft\\Office\\16.0\\OfficeFileCache", "what": "Кэш файлов OneDrive/SharePoint. Не удаляйте, пока OneDrive не досинхронизировал все изменения." }
+    ],
+    "note": ""
+  },
+  {
+    "id": "messengers",
+    "title": "Мессенджеры (Telegram, Discord, Zoom)",
+    "match": "^(Telegram|Discord|Zoom)",
+    "exes": [],
+    "caches": [
+      { "title": "Discord: кэш", "path": "%APPDATA%\\discord\\Cache" },
+      { "title": "Discord: кэш кода", "path": "%APPDATA%\\discord\\Code Cache" },
+      { "title": "Discord: кэш видеокарты", "path": "%APPDATA%\\discord\\GPUCache" }
+    ],
+    "reports": [
+      { "title": "Telegram: скачанные медиа (кэш)", "path": "%APPDATA%\\Telegram Desktop\\tdata\\user_data", "what": "Картинки и видео из чатов. Удаляется в самом Telegram: Настройки → Продвинутые → Управление памятью — так безопаснее." }
+    ],
+    "note": ""
+  },
+  {
+    "id": "cad3d",
+    "title": "Другие 3D/CAD (SketchUp, ArchiCAD, Blender, CorelDRAW)",
+    "match": "^(SketchUp|ARCHICAD|Archicad|Blender|CorelDRAW)",
+    "exes": [ "SketchUp.exe", "ArchiCAD.exe", "Archicad.exe", "blender.exe", "CorelDRW.exe" ],
+    "caches": [],
+    "reports": [],
+    "note": ""
+  }
+]

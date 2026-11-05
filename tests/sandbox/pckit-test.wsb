@@ -1,0 +1,19 @@
+<Configuration>
+  <VGpu>Disable</VGpu>
+  <Networking>Enable</Networking>
+  <MappedFolders>
+    <MappedFolder>
+      <HostFolder>D:\Ai Projects\Clear PC and Boost\pckit</HostFolder>
+      <SandboxFolder>C:\pckit-src</SandboxFolder>
+      <ReadOnly>true</ReadOnly>
+    </MappedFolder>
+    <MappedFolder>
+      <HostFolder>D:\Ai Projects\Clear PC and Boost\pckit\tests\sandbox\out</HostFolder>
+      <SandboxFolder>C:\pckit-out</SandboxFolder>
+      <ReadOnly>false</ReadOnly>
+    </MappedFolder>
+  </MappedFolders>
+  <LogonCommand>
+    <Command>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\pckit-src\tests\sandbox\e2e.ps1</Command>
+  </LogonCommand>
+</Configuration>

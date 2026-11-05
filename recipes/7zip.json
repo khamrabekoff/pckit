@@ -1,0 +1,13 @@
+{
+  "id": "7zip",
+  "title": "7-Zip",
+  "risk": "low",
+  "match": { "displayName": "^7-Zip", "winget": "7zip.7zip" },
+  "steps": [
+    {
+      "type": "registry",
+      "key": "HKCU\\Software\\7-Zip",
+      "note": "настройки 7-Zip живут только в реестре"
+    }
+  ]
+}

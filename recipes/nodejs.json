@@ -1,0 +1,14 @@
+{
+  "id": "nodejs",
+  "title": "Node.js",
+  "risk": "low",
+  "match": { "displayName": "^Node\\.js", "winget": "OpenJS.NodeJS" },
+  "steps": [
+    {
+      "type": "command",
+      "capture": "npm ls -g --depth=0",
+      "restoreTemplate": "",
+      "note": "глобальные пакеты переустанавливаются вручную по списку"
+    }
+  ]
+}

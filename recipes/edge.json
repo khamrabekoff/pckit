@@ -1,0 +1,14 @@
+{
+  "id": "edge",
+  "title": "Microsoft Edge",
+  "risk": "medium",
+  "match": { "displayName": "^Microsoft Edge$", "winget": "Microsoft.Edge" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%LOCALAPPDATA%\\Microsoft\\Edge\\User Data\\Default",
+      "exclude": ["Cache", "Code Cache", "GPUCache", "Service Worker", "ShaderCache", "GrShaderCache", "DawnCache", "*.log", "*.tmp"],
+      "note": "закладки, расширения, настройки; пароли — только через синхронизацию аккаунта"
+    }
+  ]
+}

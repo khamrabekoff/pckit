@@ -1,0 +1,13 @@
+{
+  "id": "git",
+  "title": "Git",
+  "risk": "low",
+  "match": { "displayName": "^Git$", "winget": "Git.Git" },
+  "steps": [
+    {
+      "type": "file",
+      "path": "%USERPROFILE%\\.gitconfig",
+      "note": "имя, почта, алиасы, настройки core"
+    }
+  ]
+}

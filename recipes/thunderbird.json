@@ -1,0 +1,14 @@
+{
+  "id": "thunderbird",
+  "title": "Mozilla Thunderbird",
+  "risk": "high",
+  "match": { "displayName": "^Mozilla Thunderbird", "winget": "Mozilla.Thunderbird" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\Thunderbird\\Profiles",
+      "exclude": ["cache2", "startupCache", "*.log"],
+      "note": "почта и настройки. Пароли ящиков хранятся отдельно и могут не перенестись — держите их в менеджере паролей"
+    }
+  ]
+}

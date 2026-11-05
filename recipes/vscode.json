@@ -1,0 +1,20 @@
+{
+  "id": "vscode",
+  "title": "Visual Studio Code",
+  "risk": "low",
+  "match": { "displayName": "^Microsoft Visual Studio Code", "winget": "Microsoft.VisualStudioCode" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\Code\\User",
+      "exclude": ["workspaceStorage", "History", "logs", "Backups", "state.vscdb.backup", "globalStorage"],
+      "note": "settings.json, keybindings.json, snippets, список расширений"
+    },
+    {
+      "type": "command",
+      "capture": "code --list-extensions",
+      "restoreTemplate": "code --install-extension {line}",
+      "note": "расширения ставятся заново по списку"
+    }
+  ]
+}

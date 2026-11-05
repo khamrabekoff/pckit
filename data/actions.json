@@ -1,0 +1,979 @@
+[
+  {
+    "id": "power.plan",
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: включайте, только когда играете от сети — от батареи она сядет быстрее",
+    "group": "Питание",
+    "title": "Схема питания «Максимальная производительность»",
+    "what": "Процессор не сбрасывает частоты в простое и не экономит энергию во время игры.",
+    "effect": "Ровнее время кадра, меньше просадок при загрузке карты. Цена: +10–20 Вт и чуть больше шума.",
+    "effectLevel": "высокий",
+    "risk": "low",
+    "needs": "power",
+    "steps": [
+      { "type": "powerplan", "mode": "ultimate" }
+    ],
+    "verify": [
+      { "type": "powerplan", "notBalanced": true }
+    ]
+  },
+  {
+    "id": "mouse.accel.off",
+    "group": "Ввод",
+    "title": "Отключить ускорение мыши",
+    "what": "Убирает «догоняние» прицела: движение мыши один-в-один, без ускорения.",
+    "effect": "На fps не влияет вообще. Влияет на стрельбу: аим становится предсказуемым, флики перестают «улетать».",
+    "effectLevel": "высокий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Mouse", "name": "MouseSpeed", "value": "0", "valueType": "String" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Mouse", "name": "MouseThreshold1", "value": "0", "valueType": "String" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Mouse", "name": "MouseThreshold2", "value": "0", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Mouse", "name": "MouseSpeed", "value": "0" }
+    ]
+  },
+  {
+    "id": "nv.cs2.power",
+    "group": "Видеокарта",
+    "title": "NVIDIA: максимальная производительность для CS2",
+    "what": "В профиле драйвера NVIDIA для cs2.exe видеокарта не сбрасывает частоты между кадрами.",
+    "effect": "Ровнее время кадра и меньше просадок в лёгких сценах с высоким fps. Действует только пока запущена CS2 — в простое карта экономит энергию как обычно.",
+    "effectLevel": "высокий",
+    "risk": "low",
+    "needs": "admin",
+    "requires": { "gpu": "nvidia", "cs2": true },
+    "steps": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 274197361, "value": 1, "title": "режим управления питанием: максимальная производительность" }
+    ],
+    "verify": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 274197361, "value": 1 }
+    ]
+  },
+  {
+    "id": "nv.cs2.lowlatency",
+    "group": "Видеокарта",
+    "title": "NVIDIA: режим низкой задержки для CS2",
+    "what": "Драйвер готовит не больше одного кадра наперёд (в панели NVIDIA это «Режим низкой задержки: Вкл.»).",
+    "effect": "Меньше задержка ввода, когда видеокарта загружена на 100%. Если в CS2 включён NVIDIA Reflex, он главнее — вреда от настройки нет.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "admin",
+    "requires": { "gpu": "nvidia", "cs2": true },
+    "steps": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 8102046, "value": 1, "title": "режим низкой задержки: вкл." }
+    ],
+    "verify": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 8102046, "value": 1 }
+    ]
+  },
+  {
+    "id": "nv.cs2.vsync.off",
+    "group": "Видеокарта",
+    "title": "NVIDIA: принудительно выключить V-Sync для CS2",
+    "what": "Драйвер не включает вертикальную синхронизацию в CS2, даже если её включит игра.",
+    "effect": "Без V-Sync меньше задержка ввода. Обычно в CS2 V-Sync и так выключен — тогда эффекта не будет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Если вы играете с G-Sync и намеренно включаете V-Sync в панели NVIDIA — не включайте эту настройку.",
+    "requires": { "gpu": "nvidia", "cs2": true },
+    "steps": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 11041231, "value": 138504007, "title": "вертикальная синхронизация: выкл." }
+    ],
+    "verify": [
+      { "type": "nvidia", "exe": "cs2.exe", "id": 11041231, "value": 138504007 }
+    ]
+  },
+  {
+    "id": "gpu.cs2.highperf",
+    "group": "Видеокарта",
+    "title": "CS2 всегда на мощной видеокарте",
+    "what": "Windows запускает cs2.exe на дискретной видеокарте («Высокая производительность» в настройках графики).",
+    "effect": "На ноутбуках с двумя видеокартами CS2 иногда стартует на встроенной — это минус половина fps. На ПК с одной видеокартой ничего не меняет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "requires": { "cs2": true },
+    "boostIf": { "hybridGpu": true },
+    "boostWhy": "у вас две видеокарты: закрепляем CS2 за мощной",
+    "steps": [
+      { "type": "regkv", "path": "HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences", "name": "{cs2exe}", "key": "GpuPreference", "value": "2" }
+    ],
+    "verify": [
+      { "type": "regkv", "path": "HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences", "name": "{cs2exe}", "key": "GpuPreference", "value": "2" }
+    ]
+  },
+  {
+    "id": "gpu.hags.on",
+    "group": "Видеокарта",
+    "title": "Аппаратное планирование GPU (HAGS)",
+    "what": "Видеокарта сама управляет своей очередью кадров вместо Windows.",
+    "effect": "На современных картах (GeForce GTX 10 и новее, Radeon RX 5000 и новее) чуть ниже задержка и нагрузка на процессор; нужно для генерации кадров DLSS 3. Эффект в CS2 небольшой.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "minBuild": 19041,
+    "note": "Начинает действовать после перезагрузки.",
+    "requires": { "gpu": [ "nvidia", "amd" ] },
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", "name": "HwSchMode", "value": 2, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers", "name": "HwSchMode", "value": 2 }
+    ]
+  },
+  {
+    "id": "cs2.autoexec",
+    "group": "CS2",
+    "title": "CS2: autoexec с сетью на максимум и индикаторами проблем",
+    "what": "Добавляет в autoexec.cfg блок pckit: максимальный сетевой трафик от сервера и значки на экране, когда проседает fps, растёт пинг или теряются пакеты.",
+    "effect": "Если в игре стоял ограниченный трафик — меньше «потерь» в перестрелках. Индикаторы сразу показывают, что мешает: компьютер (fps) или интернет (пинг, потери). Только штатные команды игры — FACEIT и VAC это не трогает.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "none",
+    "note": "Ваши строки в autoexec.cfg не трогаются: pckit пишет только свой блок между отметками.",
+    "requires": { "cs2": true },
+    "steps": [
+      {
+        "type": "cs2cfg",
+        "lines": [
+          "rate 786432",
+          "cl_hud_telemetry_frametime_show 1",
+          "cl_hud_telemetry_ping_show 1",
+          "cl_hud_telemetry_net_misdelivery_show 1",
+          "echo \"pckit autoexec loaded\""
+        ]
+      }
+    ],
+    "verify": [
+      { "type": "cs2cfg" }
+    ]
+  },
+  {
+    "id": "cs2.launch",
+    "group": "CS2",
+    "title": "CS2: параметр запуска +exec autoexec",
+    "what": "Добавляет в параметры запуска CS2 в Steam команду, которая гарантированно выполняет autoexec.cfg при старте игры.",
+    "effect": "Ваш autoexec (и блок pckit) всегда применяется — даже если игра его пропустила. Остальные ваши параметры запуска сохраняются.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "none",
+    "note": "Перед применением закройте Steam (значок у часов → Выход), иначе Steam затрёт изменения.",
+    "requires": { "cs2": true },
+    "steps": [
+      { "type": "cs2launch", "add": [ "+exec autoexec" ] }
+    ],
+    "verify": [
+      { "type": "cs2launch", "add": [ "+exec autoexec" ] }
+    ]
+  },
+  {
+    "id": "work.gpu",
+    "group": "Работа",
+    "title": "Рабочие программы — на мощной видеокарте",
+    "what": "Photoshop, AutoCAD, Revit, Premiere и другие найденные программы Windows запускает на дискретной видеокарте.",
+    "effect": "На ноутбуках с двумя видеокартами — плавнее вьюпорт, быстрее фильтры и рендер. На ПК с одной видеокартой ничего не меняет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "boostIf": { "hybridGpu": true },
+    "boostWhy": "у вас две видеокарты: закрепляем рабочие программы за мощной",
+    "steps": [ { "type": "workgpu" } ],
+    "verify": [ { "type": "workgpu" } ]
+  },  {
+    "id": "gamedvr.off",
+    "group": "Игровой режим",
+    "title": "Отключить Game DVR (фоновая запись игр)",
+    "what": "Windows перестаёт писать последние секунды игры в фоне.",
+    "effect": "Меньше фоновой нагрузки на диск и память, иногда +1–3% fps и меньше микрофризов.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\GameDVR", "name": "AppCaptureEnabled", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\System\\GameConfigStore", "name": "GameDVR_Enabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "gamemode.on",
+    "boostIf": { "cpuCoresMax": 4 }, "boostWhy": "у процессора 4 ядра или меньше: игровой режим помогает, когда рядом открыт браузер или Discord",
+    "group": "Игровой режим",
+    "title": "Включить игровой режим Windows",
+    "what": "Windows даёт игре приоритет, когда в фоне работают другие программы.",
+    "effect": "Помогает, если рядом открыт браузер или Discord; в чистой игре эффекта почти нет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\GameBar", "name": "AutoGameModeEnabled", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\GameBar", "name": "AllowAutoGameMode", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\GameBar", "name": "AutoGameModeEnabled", "value": 1 }
+    ]
+  },
+  {
+    "id": "mmcss.games",
+    "group": "Планировщик",
+    "title": "Приоритет игр в планировщике (MMCSS)",
+    "what": "Меняет резерв CPU для мультимедиа и поднимает приоритет задачи Games.",
+    "effect": "Игра реже ждёт процессор за фоновыми задачами: ровнее фреймтайм на средних CPU.",
+    "effectLevel": "средний",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile", "name": "SystemResponsiveness", "value": 10, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "GPU Priority", "value": 8, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "Priority", "value": 6, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "Scheduling Category", "value": "High", "valueType": "String" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "SFIO Priority", "value": "High", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile\\Tasks\\Games", "name": "Priority", "value": 6 }
+    ]
+  },
+  {
+    "id": "power.throttling.off",
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: заметно сократит время работы от батареи",
+    "group": "Питание",
+    "title": "Отключить ограничение фоновых процессов (Power Throttling)",
+    "what": "Windows перестаёт искусственно замедлять «фоновые» потоки, в том числе игровые.",
+    "effect": "Заметно на ноутбуках и слабых CPU, где Windows душит частоты; на мощном десктопе эффект небольшой.",
+    "effectLevel": "средний",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling", "name": "PowerThrottlingOff", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling", "name": "PowerThrottlingOff", "value": 1 }
+    ]
+  },
+  {
+    "id": "p2p.updates.off",
+    "group": "Фон",
+    "title": "Не раздавать обновления Windows другим",
+    "what": "Отключает P2P-раздачу обновлений: ПК не отдаёт их в интернет и локальную сеть.",
+    "effect": "Меньше фоновой нагрузки на сеть и диск, особенно на медленном канале. На фпс влияет косвенно.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeliveryOptimization\\Config", "name": "DODownloadMode", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\DeliveryOptimization\\Config", "name": "DODownloadMode", "value": 0 }
+    ]
+  },
+  {
+    "id": "stickykeys.off",
+    "group": "Ввод",
+    "title": "Отключить залипание клавиш",
+    "what": "Shift больше не вызывает диалог «Залипание клавиш» в разгар раунда.",
+    "effect": "На fps не влияет. Убирает раздражающее окно и случайную смену раскладки.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys", "name": "Flags", "value": "506", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Accessibility\\StickyKeys", "name": "Flags", "value": "506" }
+    ]
+  },
+  {
+    "id": "network.throttling.off",
+    "group": "Сеть",
+    "title": "Снять лимит сетевого троттлинга",
+    "what": "Убирает ограничение на число пакетов в миллисекунду для мультимедиа-задач.",
+    "effect": "Честно: на современном ПК чаще всего не даёт ничего. Оставлено, потому что вреда нет и это просят на форумах.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile", "name": "NetworkThrottlingIndex", "value": -1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Multimedia\\SystemProfile", "name": "NetworkThrottlingIndex", "value": -1 }
+    ]
+  },
+  {
+    "id": "windowed.swapeffect",
+    "group": "Графика",
+    "title": "Оптимизация для оконных игр",
+    "what": "Windows 11 переключает оконные и borderless DX10/11 игры на более быстрый способ вывода кадра (флип-модель).",
+    "effect": "Меньше задержка и ровнее кадры в оконном и безрамочном режиме. На настоящий полноэкранный режим не влияет.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "none",
+    "minBuild": 22000,
+    "steps": [
+      { "type": "regkv", "path": "HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences", "name": "DirectXUserGlobalSettings", "key": "SwapEffectUpgradeEnable", "value": "1" }
+    ],
+    "verify": [
+      { "type": "regkv", "path": "HKCU:\\Software\\Microsoft\\DirectX\\UserGpuPreferences", "name": "DirectXUserGlobalSettings", "key": "SwapEffectUpgradeEnable", "value": "1" }
+    ]
+  },
+  {
+    "id": "bgapps.off",
+    "boostIf": { "ramGbMax": 8 }, "boostWhy": "у вас 8 ГБ памяти или меньше: фоновые приложения отнимают её у игры",
+    "group": "Фон",
+    "title": "Запретить фоновые приложения",
+    "what": "Приложения из Microsoft Store перестают работать в фоне, когда вы ими не пользуетесь.",
+    "effect": "Меньше нагрузки на процессор, память и сеть — заметно в основном на слабых ПК.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "none",
+    "note": "Приложения из Store не будут обновлять плитки и присылать уведомления в фоне.",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications", "name": "GlobalUserDisabled", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", "name": "BackgroundAppGlobalToggle", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications", "name": "GlobalUserDisabled", "value": 1 },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", "name": "BackgroundAppGlobalToggle", "value": 0 }
+    ]
+  },
+  {
+    "id": "usb.suspend.off",
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: USB-устройства будут тратить батарею и в простое",
+    "group": "Питание",
+    "title": "Не усыплять USB (мышь/клавиатура)",
+    "what": "Отключает выборочную приостановку USB-портов на активной схеме питания.",
+    "effect": "Убирает редкие подвисания и «просыпания» мыши и клавиатуры, особенно беспроводных приёмников.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "powercfg", "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3", "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", "value": 0 }
+    ],
+    "verify": [
+      { "type": "powercfg", "subgroup": "2a737441-1930-4402-8d77-b2bebba308a3", "setting": "48e6b7a6-50f5-4782-a5d4-53bb8f07e226", "value": 0 }
+    ]
+  },
+  {
+    "id": "nic.power.off",
+    "group": "Сеть",
+    "title": "Не отключать сетевую карту для экономии энергии",
+    "what": "Запрещает Windows выключать физические сетевые адаптеры, чтобы сэкономить энергию.",
+    "effect": "Убирает редкие отвалы сети после простоя и «проснувшийся» высокий пинг.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "netpower", "allowTurnOff": false }
+    ],
+    "verify": [
+      { "type": "netpower" }
+    ]
+  },
+  {
+    "id": "hibernate.off",
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: гибернация сохраняет вашу работу, когда садится батарея",
+    "group": "Питание",
+    "title": "Отключить гибернацию и быстрый запуск",
+    "what": "Выключает гибернацию и удаляет файл hiberfil.sys; «Завершение работы» становится полным выключением.",
+    "effect": "Освобождает на диске файл размером около 40% ОЗУ, а полное выключение лечит часть «залипших» драйверов.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "На ноутбуке пропадёт режим гибернации; включение при загрузке станет чуть дольше.",
+    "steps": [
+      { "type": "hibernate", "state": "off" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\Power", "name": "HibernateEnabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "mpo.off",
+    "group": "Исправления",
+    "title": "Исправить мерцание и чёрные экраны (MPO)",
+    "what": "Отключает оверлеи нескольких плоскостей (MPO) в диспетчере окон.",
+    "effect": "Помогает только если есть мерцание или чёрные вспышки на NVIDIA/AMD; если их нет — не включайте.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Нужна перезагрузка.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm", "name": "OverlayTestMode", "value": 5, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows\\Dwm", "name": "OverlayTestMode", "value": 5 }
+    ]
+  },
+  {
+    "id": "ads.off",
+    "group": "Фон",
+    "title": "Убрать рекламу и навязанные приложения",
+    "what": "Выключает рекламный идентификатор, предложения в Пуске и тихую установку «рекомендованных» приложений.",
+    "effect": "Чище меню Пуск и меньше фоновой активности. На fps почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "name": "Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SilentInstalledAppsEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SystemPaneSuggestionsEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-338388Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-338389Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-338393Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-353694Enabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SubscribedContent-353696Enabled", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\AdvertisingInfo", "name": "Enabled", "value": 0 },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager", "name": "SilentInstalledAppsEnabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "widgets.off",
+    "group": "Фон",
+    "title": "Отключить виджеты",
+    "what": "Отключает панель виджетов Windows 11 политикой.",
+    "effect": "Перестаёт работать фоновый процесс виджетов — освобождаются десятки МБ ОЗУ.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh", "name": "AllowNewsAndInterests", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Dsh", "name": "AllowNewsAndInterests", "value": 0 }
+    ]
+  },
+  {
+    "id": "copilot.off",
+    "group": "Фон",
+    "title": "Отключить Copilot",
+    "what": "Отключает Windows Copilot политикой для текущего пользователя.",
+    "effect": "Убирает значок и фоновую активность Copilot. На fps почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "name": "TurnOffWindowsCopilot", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\WindowsCopilot", "name": "TurnOffWindowsCopilot", "value": 1 }
+    ]
+  },
+  {
+    "id": "taskbar.endtask",
+    "group": "Удобство",
+    "title": "Пункт «Завершить задачу» на панели задач",
+    "what": "Добавляет в контекстное меню значка на панели задач пункт «Завершить задачу».",
+    "effect": "Удобство: можно быстро убить зависшую игру, не открывая диспетчер задач. На производительность не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "minBuild": 22631,
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings", "name": "TaskbarEndTask", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced\\TaskbarDeveloperSettings", "name": "TaskbarEndTask", "value": 1 }
+    ]
+  },
+  {
+    "id": "shutdown.fast",
+    "group": "Удобство",
+    "title": "Быстрее закрывать зависшие программы",
+    "what": "Сокращает ожидание Windows перед принудительным закрытием зависших программ до 2 секунд.",
+    "effect": "Выключение и перезагрузка не «висят» на зависшей программе. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "WaitToKillAppTimeout", "value": "2000", "valueType": "String" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "HungAppTimeout", "value": "2000", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "WaitToKillAppTimeout", "value": "2000" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "HungAppTimeout", "value": "2000" }
+    ]
+  },
+  {
+    "id": "visualfx.perf",
+    "boostIf": { "ramGbMax": 8 }, "boostWhy": "у вас 8 ГБ памяти или меньше: облегчённый интерфейс заметно экономит ресурсы",
+    "group": "Графика",
+    "title": "Упростить визуальные эффекты",
+    "what": "Отключает анимации окон и панели задач, оставляя сглаживание шрифтов и миниатюры.",
+    "effect": "Заметно только на слабых ПК: интерфейс отзывчивее. На мощной системе разницы почти нет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "note": "Применится после выхода из системы.",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "name": "VisualFXSetting", "value": 3, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "UserPreferencesMask", "value": [144,18,3,128,16,0,0,0], "valueType": "Binary" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop\\WindowMetrics", "name": "MinAnimate", "value": "0", "valueType": "String" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "TaskbarAnimations", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects", "name": "VisualFXSetting", "value": 3 },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "TaskbarAnimations", "value": 0 }
+    ]
+  },
+  {
+    "id": "tasks.telemetry.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить задачи телеметрии в планировщике",
+    "what": "Отключает задачи сбора данных об использовании и совместимости приложений.",
+    "effect": "Меньше разовых фоновых нагрузок на диск и процессор. На fps в игре почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\ProgramDataUpdater" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\UsbCeip" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Autochk\\Proxy" }
+    ],
+    "verify": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\Microsoft Compatibility Appraiser" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\ProgramDataUpdater" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\Consolidator" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Customer Experience Improvement Program\\UsbCeip" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Autochk\\Proxy" }
+    ]
+  },
+  {
+    "id": "svc.sysmain.off",
+    "skipIf": { "ssd": false }, "skipWhy": "Windows на HDD: SysMain ускоряет запуск программ — его лучше оставить",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить службу SysMain (Superfetch)",
+    "what": "Останавливает службу, которая заранее подгружает часто используемые программы в память.",
+    "effect": "На SSD разницы почти нет. На HDD игры и сама Windows могут загружаться МЕДЛЕННЕЕ — на HDD не включайте.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "service", "name": "SysMain", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "SysMain", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "svc.telemetry.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить службы телеметрии (DiagTrack, dmwappushservice)",
+    "what": "Останавливает службы, которые собирают и отправляют диагностические данные в Microsoft.",
+    "effect": "Меньше фоновой сетевой и дисковой активности. На fps влияет слабо.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "service", "name": "DiagTrack", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "dmwappushservice", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "DiagTrack", "startType": "Disabled" },
+      { "type": "service", "name": "dmwappushservice", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "svc.xbox.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить службы Xbox",
+    "what": "Останавливает службы входа в Xbox, облачных сохранений и сетевых функций Xbox.",
+    "effect": "Сломает вход в Xbox/Game Pass и сохранения игр из Microsoft Store. Службу геймпадов (XboxGipSvc) не трогаем.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "service", "name": "XblAuthManager", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "XblGameSave", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "XboxNetApiSvc", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "XblAuthManager", "startType": "Disabled" },
+      { "type": "service", "name": "XblGameSave", "startType": "Disabled" },
+      { "type": "service", "name": "XboxNetApiSvc", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "svc.search.off",
+    "skipIf": { "ssd": false }, "skipWhy": "Windows на HDD: без индекса поиск файлов станет очень медленным",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить индексацию поиска (WSearch)",
+    "what": "Останавливает службу индексации файлов для поиска Windows.",
+    "effect": "Поиск в Пуске и Проводнике станет медленным. Освобождает диск и процессор от фоновой индексации.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "steps": [
+      { "type": "service", "name": "WSearch", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "WSearch", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "search.web.off",
+    "group": "Конфиденциальность",
+    "title": "Не искать в интернете из меню Пуск",
+    "what": "Поиск в Пуске перестаёт отправлять набранный текст в Bing и показывать веб-подсказки.",
+    "effect": "Меньше сетевых запросов при поиске и нет «мусора» из интернета в результатах. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Поиск по файлам и программам работает как раньше; веб-результаты и подсказки Bing пропадут.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer", "name": "DisableSearchBoxSuggestions", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", "name": "DisableSearchBoxSuggestions", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Search", "name": "BingSearchEnabled", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Explorer", "name": "DisableSearchBoxSuggestions", "value": 1 }
+    ]
+  },
+  {
+    "id": "cortana.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить Cortana и облачный поиск",
+    "what": "Политикой запрещает Cortana и облачный поиск (учётные записи, почта) в поиске Windows.",
+    "effect": "Меньше фоновой активности и обращений в облако. На fps почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "В современных сборках Windows 11 Cortana и так почти не используется; поиск по облачным аккаунтам в Пуске пропадёт.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowCortana", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowCloudSearch", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowCortanaAboveLock", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Search", "name": "AllowCortana", "value": 0 }
+    ]
+  },
+  {
+    "id": "tips.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить «советы» Windows и продвигаемые приложения",
+    "what": "Политикой отключает подсказки и советы Windows и «потребительские функции» (установка рекламируемых приложений).",
+    "effect": "Меньше всплывающих советов и фоновых обращений к контенту Microsoft. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Дополняет действие «Убрать рекламу и навязанные приложения». Microsoft Store и вход в аккаунт продолжают работать.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent", "name": "DisableSoftLanding", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent", "name": "DisableWindowsConsumerFeatures", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent", "name": "DisableWindowsConsumerFeatures", "value": 1 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\CloudContent", "name": "DisableSoftLanding", "value": 1 }
+    ]
+  },
+  {
+    "id": "activity.history.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить журнал действий (Timeline)",
+    "what": "Политикой запрещает Windows собирать журнал ваших действий и отправлять его в облако.",
+    "effect": "Меньше записей на диск и данных, уходящих в Microsoft. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Пропадёт продолжение действий на других устройствах и список недавних действий.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "EnableActivityFeed", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "PublishUserActivities", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "UploadUserActivities", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\System", "name": "EnableActivityFeed", "value": 0 }
+    ]
+  },
+  {
+    "id": "input.collect.off",
+    "group": "Конфиденциальность",
+    "title": "Не собирать данные рукописного ввода и набора текста",
+    "what": "Политиками отключает неявный сбор рукописного ввода и набранного текста для «персонализации» и отправку отчётов по рукописному вводу.",
+    "effect": "Меньше данных о вашем вводе остаётся на ПК и уходит в Microsoft. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Подсказки при наборе могут стать менее «персональными».",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitInkCollection", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitTextCollection", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\HandwritingErrorReports", "name": "PreventHandwritingErrorReports", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\TabletPC", "name": "PreventHandwritingDataSharing", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitTextCollection", "value": 1 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\InputPersonalization", "name": "RestrictImplicitInkCollection", "value": 1 }
+    ]
+  },
+  {
+    "id": "feedback.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить запросы отзывов Windows",
+    "what": "Windows перестаёт показывать уведомления «Как вам Windows?» и просить оценки.",
+    "effect": "Меньше всплывающих окон и фоновой активности сбора отзывов. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules", "name": "NumberOfSIUFInPeriod", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "DoNotShowFeedbackNotifications", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "DoNotShowFeedbackNotifications", "value": 1 },
+      { "type": "reg", "path": "HKCU:\\SOFTWARE\\Microsoft\\Siuf\\Rules", "name": "NumberOfSIUFInPeriod", "value": 0 }
+    ]
+  },
+  {
+    "id": "tracking.progs.off",
+    "group": "Конфиденциальность",
+    "title": "Не отслеживать запуски программ и язык для сайтов",
+    "what": "Windows перестаёт учитывать, какие программы вы запускаете (для «частых» в Пуске), и не сообщает сайтам список ваших языков.",
+    "effect": "Меньше учёта вашей активности. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "note": "Раздел «Часто используемые» в Пуске перестанет обновляться.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "Start_TrackProgs", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Control Panel\\International\\User Profile", "name": "HttpAcceptLanguageOptOut", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "Start_TrackProgs", "value": 0 }
+    ]
+  },
+  {
+    "id": "edge.background.off",
+    "group": "Фон",
+    "title": "Edge: не работать в фоне и не стартовать заранее",
+    "what": "Политиками Edge отключает фоновую работу после закрытия окна и «ускоренный запуск» (Startup Boost).",
+    "effect": "Процессы msedge перестают висеть в фоне и занимать ОЗУ. На fps влияет слабо; Edge открывается чуть дольше.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "В Edge появится надпись «Управляется вашей организацией» — это нормально для политик.",
+    "source": "Microsoft Edge policies",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "BackgroundModeEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "StartupBoostEnabled", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "BackgroundModeEnabled", "value": 0 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "StartupBoostEnabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "edge.telemetry.off",
+    "group": "Конфиденциальность",
+    "title": "Edge: отключить диагностику и отзывы",
+    "what": "Политиками Edge отключает отправку диагностических данных, статистики использования и кнопку отзыва.",
+    "effect": "Меньше фоновой отправки данных из браузера. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "В Edge появится надпись «Управляется вашей организацией».",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "DiagnosticData", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "MetricsReportingEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "UserFeedbackAllowed", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "DiagnosticData", "value": 0 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "UserFeedbackAllowed", "value": 0 }
+    ]
+  },
+  {
+    "id": "appcompat.telemetry.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить телеметрию совместимости приложений",
+    "what": "Политиками отключает сбор данных об использовании приложений (AIT), инвентаризацию программ и «Запись действий» (Steps Recorder).",
+    "effect": "Меньше фонового сбора и записей на диск. На fps в игре почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Ассистент совместимости программ (PCA) остаётся включённым. Приложение «Запись действий» перестанет работать.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "AITEnable", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisableInventory", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisableUAR", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "AITEnable", "value": 0 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisableInventory", "value": 1 }
+    ]
+  },
+  {
+    "id": "diagpolicy.extra.off",
+    "group": "Конфиденциальность",
+    "title": "Не отправлять имя ПК и данные Desktop Analytics",
+    "what": "Политиками запрещает добавлять имя устройства в диагностику, обработку Desktop Analytics и сбор данных браузера Edge для аналитики.",
+    "effect": "Меньше идентифицирующих данных в телеметрии. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "AllowDeviceNameInTelemetry", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "AllowDesktopAnalyticsProcessing", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "MicrosoftEdgeDataOptIn", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection", "name": "AllowDeviceNameInTelemetry", "value": 0 }
+    ]
+  },
+  {
+    "id": "wer.off",
+    "group": "Конфиденциальность",
+    "title": "Отключить отправку отчётов об ошибках (WER)",
+    "what": "Политикой выключает Windows Error Reporting: отчёты о сбоях программ не формируются и не отправляются.",
+    "effect": "Меньше разовой нагрузки на диск и процессор после падения программы и меньше данных в Microsoft. На fps не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Windows не предложит решение проблемы после сбоя и не сохранит отчёт для разбора; сами сбои это не лечит.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "Disabled", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "Disabled", "value": 1 }
+    ]
+  },
+  {
+    "id": "tasks.telemetry2.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить ещё задачи сбора данных в планировщике",
+    "what": "Отключает задачи отслеживания запуска приложений, инвентаризации устройства, резервных данных приложений и запросов отзывов (Siuf).",
+    "effect": "Меньше разовых фоновых запусков. На fps в игре почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Диспетчер задач перестанет показывать «Влияние на запуск» в автозагрузке (это считает задача StartupAppTask). Задач, которых нет в вашей сборке Windows, движок пропускает.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\AitAgent" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\MareBackup" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Device Information\\Device" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClientOnScenarioDownload" }
+    ],
+    "verify": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\StartupAppTask" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Feedback\\Siuf\\DmClient" }
+    ]
+  },
+  {
+    "id": "svc.diaghub.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Отключить сборщик диагностики (diagnosticshub.standardcollector)",
+    "what": "Останавливает службу «Стандартный сборщик центра диагностики», которая собирает данные для средств диагностики и профилирования.",
+    "effect": "Убирает редкий фоновый процесс. На fps влияет слабо.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Профилировщики Visual Studio, использующие этот сборщик, могут перестать работать.",
+    "source": "privacy.sexy",
+    "steps": [
+      { "type": "service", "name": "diagnosticshub.standardcollector.service", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "diagnosticshub.standardcollector.service", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "myth.nagle",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Отключение алгоритма Nagle (TcpAckFrequency, TCPNoDelay)",
+    "what": "Обещают снизить пинг в играх, отключив накопление мелких пакетов.",
+    "effect": "CS2 и большинство шутеров используют UDP, а алгоритм Nagle работает только для TCP — на пинг в игре это не влияет.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.qos20",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Снять резерв 20% канала (NonBestEffortLimit)",
+    "what": "Обещают вернуть 20% интернет-канала, которые якобы резервирует Windows.",
+    "effect": "Windows не резервирует 20% канала, если нет QoS-трафика. Это миф со времён Windows XP.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.hpet",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "bcdedit: useplatformclock / disabledynamictick / HPET",
+    "what": "Обещают убрать задержки и поднять fps правкой таймеров через bcdedit.",
+    "effect": "На современных системах чаще ухудшает задержку и FPS. pckit такие команды не выполняет.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.prefetch",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Чистка Prefetch ускоряет запуск",
+    "what": "Обещают ускорить запуск программ, регулярно удаляя папку Prefetch.",
+    "effect": "Наоборот: Windows перестаёт знать, что грузить заранее, и первые запуски программ и самой системы станут медленнее.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.ramcleaner",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Очистка оперативной памяти программами-«ускорителями»",
+    "what": "Обещают освободить ОЗУ и ускорить игры одной кнопкой.",
+    "effect": "Windows сама использует свободную ОЗУ под кэш. Принудительная очистка вызывает повторные подгрузки с диска и микрофризы.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.cores",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Включить все ядра в msconfig",
+    "what": "Обещают задействовать все ядра процессора галочкой «число процессоров» в msconfig.",
+    "effect": "Этот параметр только ОГРАНИЧИВАЕТ число ядер. По умолчанию Windows и так использует все.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  }
+]

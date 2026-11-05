@@ -1,0 +1,14 @@
+{
+  "id": "telegram",
+  "title": "Telegram Desktop",
+  "risk": "high",
+  "match": { "displayName": "^Telegram Desktop$", "winget": "Telegram.TelegramDesktop" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\Telegram Desktop\\tdata",
+      "exclude": ["user_data\\cache", "*.tmp"],
+      "note": "сессия и кэш переписки. Может занимать гигабайты; сессия может не перенестись — проще войти по номеру"
+    }
+  ]
+}

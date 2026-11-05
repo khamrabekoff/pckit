@@ -1,0 +1,162 @@
+[
+  {
+    "pattern": "(?i)adobe\\s+photoshop",
+    "title": "Adobe Photoshop",
+    "vendor": "Adobe",
+    "url": "https://www.adobe.com/products/photoshop.html",
+    "note": "Adobe Creative Cloud: вход в аккаунт, лицензия привязана к нему. Папка профиля (%APPDATA%\\Adobe) переносится, но лицензию подтверждает только вход.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)adobe\\s+(acrobat|reader)",
+    "title": "Adobe Acrobat",
+    "vendor": "Adobe",
+    "url": "https://www.adobe.com/acrobat.html",
+    "note": "Pro-версия требует подписку; Reader — бесплатный.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)adobe\\s+(illustrator|indesign)",
+    "title": "Adobe Illustrator / InDesign",
+    "vendor": "Adobe",
+    "url": "https://www.adobe.com/creativecloud.html",
+    "note": "Ставится только через Creative Cloud Desktop. Сохраните список плагинов отдельно.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)autodesk\\s+revit",
+    "title": "Autodesk Revit",
+    "vendor": "Autodesk",
+    "url": "https://manage.autodesk.com/",
+    "note": "Вход в Autodesk Account, лицензия на месте не хранится. После установки проверьте лицензионный сервер/подписку.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)autodesk\\s+autocad(?!\\s+performance)",
+    "title": "Autodesk AutoCAD",
+    "vendor": "Autodesk",
+    "url": "https://manage.autodesk.com/",
+    "note": "Профили и шаблоны лежат в %APPDATA%\\Autodesk — их можно скопировать, лицензию — нет.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)autodesk",
+    "title": "Autodesk (прочее)",
+    "vendor": "Autodesk",
+    "url": "https://manage.autodesk.com/",
+    "note": "Утилиты Autodesk ставятся вместе с основным продуктом; отдельно качать обычно не нужно.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)microsoft\\s+office|office\\s+профессиональный",
+    "title": "Microsoft Office",
+    "vendor": "Microsoft",
+    "url": "https://account.microsoft.com/services",
+    "note": "Ключ или подписка привязаны к учётной записи Microsoft. Установщик — из «Служб и подписок» на account.microsoft.com.",
+    "needsAccount": true
+  },
+  {
+    "pattern": "(?i)nvidia\\s+(графический|аудиодрайвер|системное|physx|app|control)",
+    "title": "Драйверы NVIDIA",
+    "vendor": "NVIDIA",
+    "url": "https://www.nvidia.com/Download/index.aspx",
+    "note": "Ставятся с сайта NVIDIA или через NVIDIA App. Папку драйверов из профиля можно не тащить — свежий драйвер лучше.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)canon",
+    "title": "Canon (принтер/сканер)",
+    "vendor": "Canon",
+    "url": "https://www.canon.ru/support/",
+    "note": "Драйвер и утилиты скачиваются по модели принтера; после установки заново подключите принтер по Wi-Fi.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)e-imzo",
+    "title": "E-IMZO",
+    "vendor": "НИЦ «Янги технологиялар»",
+    "url": "https://e-imzo.uz/",
+    "note": "Криптографический модуль для ЭЦП. После установки переустановите сертификаты ключа (они не входят в профиль).",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)anydesk",
+    "title": "AnyDesk",
+    "vendor": "AnyDesk",
+    "url": "https://anydesk.com/download",
+    "note": "ID устройства изменится после переустановки — сообщите новый тем, кто к вам подключается.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)utorrent|µtorrent",
+    "title": "µTorrent",
+    "vendor": "BitTorrent",
+    "url": "https://www.utorrent.com/",
+    "note": "Список раздач хранится в %APPDATA%\\uTorrent — скопируйте, если он нужен.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)3utools",
+    "title": "3uTools",
+    "vendor": "3uTools",
+    "url": "https://www.3u.com/",
+    "note": "Утилита для iPhone; ставится заново с сайта.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)apple\\s+mobile\\s+device",
+    "title": "Apple Mobile Device Support",
+    "vendor": "Apple",
+    "url": "https://support.apple.com/downloads/itunes",
+    "note": "Ставится вместе с iTunes или Apple Devices из Microsoft Store.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)dell\\s+supportassist",
+    "title": "Dell SupportAssist",
+    "vendor": "Dell",
+    "url": "https://www.dell.com/support/home",
+    "note": "Определяется по сервис-тегу; после переустановки Windows сама предложит установить.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)realtek",
+    "title": "Realtek Card Reader",
+    "vendor": "Realtek",
+    "url": "https://www.realtek.com/Download/List?cate_id=593",
+    "note": "Обычно ставится Windows Update; если картридер не виден — ставьте с сайта Realtek.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)comfy",
+    "title": "ComfyUI Desktop",
+    "vendor": "Comfy Org",
+    "url": "https://www.comfy.org/download",
+    "note": "Модели (десятки гигабайт) лежат отдельно — их не копируем, укажите папку после установки.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)deepseek\\s+harness",
+    "title": "DeepSeek Harness",
+    "vendor": "DeepSeek",
+    "url": "https://www.deepseek.com/",
+    "note": "Ставится установщиком; настройки — в профиле пользователя.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)windhawk",
+    "title": "Windhawk",
+    "vendor": "Ramen Software",
+    "url": "https://windhawk.net/",
+    "note": "После установки заново поставьте моды — они качаются из каталога.",
+    "needsAccount": false
+  },
+  {
+    "pattern": "(?i)chаos|chaos\\s+unified",
+    "title": "Chaos (V-Ray / лицензия)",
+    "vendor": "Chaos",
+    "url": "https://www.chaos.com/",
+    "note": "Лицензионный сервер Chaos — вход в аккаунт после установки.",
+    "needsAccount": true
+  }
+]

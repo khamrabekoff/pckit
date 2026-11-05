@@ -1,0 +1,14 @@
+{
+  "id": "obs",
+  "title": "OBS Studio",
+  "risk": "medium",
+  "match": { "displayName": "^OBS Studio", "winget": "OBSProject.OBSStudio" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\obs-studio",
+      "exclude": ["logs", "crashes", "*.log"],
+      "note": "сцены, источники, профили записи"
+    }
+  ]
+}

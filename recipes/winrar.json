@@ -1,0 +1,14 @@
+{
+  "id": "winrar",
+  "title": "WinRAR",
+  "risk": "low",
+  "match": { "displayName": "^WinRAR", "winget": "RARLab.WinRAR" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%APPDATA%\\WinRAR",
+      "exclude": ["*.tmp"],
+      "note": "настройки архиватора, история, темы"
+    }
+  ]
+}

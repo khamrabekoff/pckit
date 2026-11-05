@@ -1,0 +1,6 @@
+# данные конкретного ПК — не публикуем
+state/
+tests/sandbox/out/
+*.png
+*.log
+*.pckit

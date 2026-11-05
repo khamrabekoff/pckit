@@ -1,0 +1,14 @@
+{
+  "id": "chrome",
+  "title": "Google Chrome",
+  "risk": "medium",
+  "match": { "displayName": "^Google Chrome$", "winget": "Google.Chrome" },
+  "steps": [
+    {
+      "type": "dir",
+      "path": "%LOCALAPPDATA%\\Google\\Chrome\\User Data\\Default",
+      "exclude": ["Cache", "Code Cache", "GPUCache", "Service Worker", "ShaderCache", "GrShaderCache", "DawnCache", "*.log", "*.tmp"],
+      "note": "закладки, история, расширения, настройки. Пароли зашифрованы DPAPI и на другой машине не откроются — их переносит только синхронизация аккаунта"
+    }
+  ]
+}

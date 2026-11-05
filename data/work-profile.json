@@ -1,0 +1,9 @@
+{
+  "note": "Что включает «Для работы»: без игровых и CS2-настроек, без экспертных служб. Ноутбуки и HDD по-прежнему учитываются правилами skipIf.",
+  "ids": [
+    "power.plan", "power.throttling.off", "bgapps.off", "p2p.updates.off",
+    "ads.off", "widgets.off", "tips.off", "search.web.off", "feedback.off",
+    "edge.background.off", "taskbar.endtask", "shutdown.fast", "stickykeys.off",
+    "nic.power.off", "work.gpu"
+  ]
+}
