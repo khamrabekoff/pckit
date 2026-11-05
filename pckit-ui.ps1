@@ -2620,7 +2620,10 @@ function Invoke-FpsMeasure {
         if ($Which -eq 'до') { $script:FpsBefore = $fps } else { $script:FpsAfter = $fps }
         Update-FpsLabel
         [void][System.Windows.Forms.MessageBox]::Show(
-            ("FPS «{0}»: средний {1:N0}, 1% low {2:N0}, 0.1% low {3:N0}, 99% кадров быстрее {4:N1} мс." -f $Which, [double]$fps.AvgFps, [double]$fps.Low1Fps, [double]$fps.Low01Fps, [double]$fps.P99FrameMs),
+            (("FPS «{0}»: средний {1:N0}, 1% low {2:N0}, 0.1% low {3:N0}, 99% кадров быстрее {4:N1} мс." -f $Which, [double]$fps.AvgFps, [double]$fps.Low1Fps, [double]$fps.Low01Fps, [double]$fps.P99FrameMs) +
+                $(if ([double]$fps.AvgFps -gt 0 -and [double]$fps.Low1Fps / [double]$fps.AvgFps -lt 0.4) {
+                    "`r`n`r`n1% low меньше 40% от среднего — кадры идут неровно (микрофризы). Обычно помогает: XMP/EXPO в BIOS, fps_max в CS2, закрыть браузер и оверлеи. Подробнее — «Проверка»."
+                } else { '' })),
             'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
     } catch {
         Update-FpsLabel
