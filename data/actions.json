@@ -975,5 +975,363 @@
     "effectLevel": "плацебо",
     "risk": "low",
     "needs": "none"
+  },
+  {
+    "id": "nic.eee.off",
+    "group": "Сеть",
+    "title": "Сетевая карта: без энергосбережения внутри драйвера",
+    "what": "Выключает Energy Efficient Ethernet, Green Ethernet и другие режимы, в которых сетевая карта засыпает между пакетами. Пишется только то, что знает драйвер вашей карты.",
+    "effect": "Убирает редкие всплески пинга после пауз в трафике на картах Realtek/Intel. Цена: пара ватт.",
+    "effectLevel": "средний",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Действует после переподключения сети или перезагрузки.",
+    "steps": [
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*EEE", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "EEELinkAdvertisement", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "EnableGreenEthernet", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "GigaLite", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "PowerSavingMode", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "ReduceSpeedOnPowerDown", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "ULPMode", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*NicAutoPowerSaver", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "AutoPowerSaveModeEnabled", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "EnableDynamicPowerGating", "value": "0", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*EEE", "value": "0" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "EEELinkAdvertisement", "value": "0" }
+    ]
+  },
+  {
+    "id": "nic.lso.off",
+    "group": "Сеть",
+    "expert": true,
+    "title": "Сетевая карта: выключить Large Send Offload",
+    "what": "Карта перестаёт сама нарезать большие исходящие пакеты, это делает процессор.",
+    "effect": "Помогает только на картах с кривым драйвером (рывки при отдаче). На исправной карте разницы нет, нагрузка на CPU чуть выше.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*LsoV2IPv4", "value": "0", "valueType": "String" },
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*LsoV2IPv6", "value": "0", "valueType": "String" }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "net", "ndi": true, "name": "*LsoV2IPv4", "value": "0" }
+    ]
+  },
+  {
+    "id": "wer.full.off",
+    "group": "Конфиденциальность",
+    "title": "Отчёты об ошибках Windows: выключить полностью",
+    "what": "Выключает службы отчётов (WerSvc, wercplsupport), отправку данных драйверов и задачу очереди отчётов.",
+    "effect": "Меньше фоновой активности после вылетов программ и игр; данные о сбоях не уходят в Microsoft.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "Disabled", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "DontSendAdditionalData", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Policies\\Microsoft\\Windows\\Windows Error Reporting", "name": "Disabled", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceInstall\\Settings", "name": "DisableSendGenericDriverNotFoundToWER", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\DeviceInstall\\Settings", "name": "DisableSendRequestAdditionalSoftwareToWER", "value": 1, "valueType": "DWord" },
+      { "type": "service", "name": "WerSvc", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "wercplsupport", "startType": "Disabled", "stop": true },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Windows Error Reporting\\QueueReporting" }
+    ],
+    "verify": [
+      { "type": "service", "name": "WerSvc", "startType": "Disabled" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Windows Error Reporting\\QueueReporting" }
+    ]
+  },
+  {
+    "id": "tasks.background.off",
+    "group": "Службы и задачи",
+    "title": "Лишние задачи планировщика",
+    "what": "Выключает задачи, которые сами просыпаются в фоне: оценка WinSAT, уведомления Карт, загрузка речевых моделей, Work Folders, диагностика энергопотребления, медиатека, «Семейная безопасность».",
+    "effect": "Меньше случайной фоновой нагрузки на диск и процессор во время игры.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Maintenance\\WinSAT" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Maps\\MapsToastTask" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Speech\\SpeechModelDownloadTask" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Work Folders\\Work Folders Logon Synchronization" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Work Folders\\Work Folders Maintenance Work" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Power Efficiency Diagnostics\\AnalyzeSystem" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Windows Media Sharing\\UpdateLibrary" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Shell\\FamilySafetyMonitor" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\DiskFootprint\\Diagnostics" }
+    ],
+    "verify": [
+      { "type": "task", "path": "\\Microsoft\\Windows\\Maintenance\\WinSAT" },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Maps\\MapsToastTask" }
+    ]
+  },
+  {
+    "id": "nv.telemetry.off",
+    "group": "Видеокарта",
+    "requires": { "gpu": "nvidia" },
+    "title": "NVIDIA: выключить логи и телеметрию драйвера",
+    "what": "Выключает внутренние журналы драйвера NVIDIA, отправку статистики и службу FrameView SDK.",
+    "effect": "Приватность и немного меньше фоновой работы драйвера. На fps почти не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Действует после перезагрузки.",
+    "steps": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RMNvLog", "value": 0 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RmLogonRC", "value": 0 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "ENABLE_OCA_LOGGING", "value": 0 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "EnableGpuFirmwareLogs", "value": 0 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RMEnableEventTracer", "value": 0 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\NVIDIA Corporation\\NvControlPanel2\\Client", "name": "OptInOrOutPreference", "value": 0, "valueType": "DWord" },
+      { "type": "service", "name": "FvSvc", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "RMNvLog", "value": 0 },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\NVIDIA Corporation\\NvControlPanel2\\Client", "name": "OptInOrOutPreference", "value": 0 }
+    ]
+  },
+  {
+    "id": "nv.pstate.max",
+    "group": "Видеокарта",
+    "expert": true,
+    "requires": { "gpu": "nvidia" },
+    "title": "NVIDIA: держать максимальные частоты всегда",
+    "what": "Запрещает драйверу снижать частоты видеокарты (PowerMizer на максимум, без динамических P-state). Для CS2 обычно хватает режима «максимальная производительность» в профиле игры.",
+    "effect": "Чуть ровнее время кадра в лёгких сценах. Цена: видеокарта греется и шумит даже на рабочем столе, +20–40 Вт в простое.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "Действует после перезагрузки. Для ноутбуков не советуем.",
+    "skipIf": { "laptop": true }, "skipWhy": "ноутбук: перегрев и быстрая разрядка",
+    "steps": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "DisableDynamicPstate", "value": 1 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "PowerMizerEnable", "value": 1 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "PowerMizerLevel", "value": 1 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "PowerMizerLevelAC", "value": 1 },
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "PerfLevelSrc", "value": 8738 }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "display", "vendor": "NVIDIA", "name": "DisableDynamicPstate", "value": 1 }
+    ]
+  },
+  {
+    "id": "gpu.msi.on",
+    "group": "Видеокарта",
+    "expert": true,
+    "requires": { "gpu": "nvidia" },
+    "title": "Видеокарта: режим прерываний MSI",
+    "what": "Переводит видеокарту NVIDIA на прерывания MSI (сообщениями) вместо старых линейных.",
+    "effect": "На части систем меньше задержка обработки прерываний и меньше микрофризов. Новые драйверы часто включают MSI сами.",
+    "effectLevel": "низкий",
+    "risk": "medium",
+    "needs": "admin",
+    "note": "Действует после перезагрузки. Если после неё чёрный экран — загрузитесь в безопасный режим и откатите pckit.",
+    "steps": [
+      { "type": "devreg", "target": "pcidisplay", "vendor": "NVIDIA", "sub": "Interrupt Management\\MessageSignaledInterruptProperties", "name": "MSISupported", "value": 1 }
+    ],
+    "verify": [
+      { "type": "devreg", "target": "pcidisplay", "vendor": "NVIDIA", "sub": "Interrupt Management\\MessageSignaledInterruptProperties", "name": "MSISupported", "value": 1 }
+    ]
+  },
+  {
+    "id": "ntfs.lastaccess.off",
+    "group": "Фон",
+    "title": "Не записывать время последнего доступа к файлам",
+    "what": "NTFS перестаёт обновлять «дату открытия» у каждого прочитанного файла.",
+    "effect": "Меньше мелких записей на диск при загрузке игр и обновлениях Steam.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem", "name": "NtfsDisableLastAccessUpdate", "value": -2147483647, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem", "name": "NtfsDisableLastAccessUpdate", "value": -2147483647 }
+    ]
+  },
+  {
+    "id": "ntfs.8dot3.off",
+    "group": "Фон",
+    "expert": true,
+    "title": "Не создавать короткие имена файлов 8.3",
+    "what": "NTFS перестаёт создавать второе имя вида PROGRA~1 для новых файлов.",
+    "effect": "Чуть быстрее создание файлов в больших папках. Очень старые установщики могут не работать.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem", "name": "NtfsDisable8dot3NameCreation", "value": 1, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\FileSystem", "name": "NtfsDisable8dot3NameCreation", "value": 1 }
+    ]
+  },
+  {
+    "id": "pca.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Помощник по совместимости программ",
+    "what": "Выключает службу PcaSvc и механизм совместимости, который следит за запуском программ и предлагает «запустить в режиме совместимости».",
+    "effect": "Чуть меньше фоновой работы при запуске программ. Старые программы больше не получат автоматических исправлений.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\AppCompat", "name": "DisablePCA", "value": 1, "valueType": "DWord" },
+      { "type": "service", "name": "PcaSvc", "startType": "Disabled", "stop": true },
+      { "type": "task", "path": "\\Microsoft\\Windows\\Application Experience\\PcaPatchDbTask" }
+    ],
+    "verify": [
+      { "type": "service", "name": "PcaSvc", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "svc.extra.off",
+    "group": "Службы и задачи",
+    "expert": true,
+    "title": "Редко нужные службы",
+    "what": "Выключает службы геолокации, телефона, кошелька, платежей NFC, установщика ActiveX и UPnP-хоста.",
+    "effect": "Почти не влияет на fps, зато меньше лишнего в системе. Не трогаем Xbox-контроллеры, офлайн-файлы и раздачу интернета.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "service", "name": "lfsvc", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "PhoneSvc", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "WalletService", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "SEMgrSvc", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "AxInstSV", "startType": "Disabled", "stop": true },
+      { "type": "service", "name": "upnphost", "startType": "Disabled", "stop": true }
+    ],
+    "verify": [
+      { "type": "service", "name": "lfsvc", "startType": "Disabled" },
+      { "type": "service", "name": "PhoneSvc", "startType": "Disabled" }
+    ]
+  },
+  {
+    "id": "browsers.background.off",
+    "group": "Фон",
+    "title": "Chrome и Brave не работают в фоне",
+    "what": "Политиками запрещает Chrome и Brave оставаться в памяти после закрытия окна и запускаться заранее при входе в Windows (для Edge это делает отдельная настройка).",
+    "effect": "Меньше процессов и памяти во время игры, если браузер закрыт.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome", "name": "BackgroundModeEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome", "name": "StartupBoostEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\BraveSoftware\\Brave", "name": "BackgroundModeEnabled", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Google\\Chrome", "name": "BackgroundModeEnabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "edge.sidebar.off",
+    "group": "Фон",
+    "title": "Edge: без боковой панели и виджета",
+    "what": "Выключает боковую панель Edge и веб-виджет, который может запускаться вместе с Windows.",
+    "effect": "Меньше фоновых процессов Edge.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "HubsSidebarEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "WebWidgetAllowed", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "WebWidgetIsEnabledOnStartup", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Edge", "name": "HubsSidebarEnabled", "value": 0 }
+    ]
+  },
+  {
+    "id": "gamedvr.policy.off",
+    "group": "Игровой режим",
+    "title": "Запись игр Xbox (DVR): выключить политикой",
+    "what": "Запрещает фоновую запись игрового видео на уровне политики и снимает горячие клавиши Game Bar.",
+    "effect": "Гарантирует, что фоновая запись не включится обратно после обновления Windows.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR", "name": "AllowGameDVR", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR", "name": "HistoricalCaptureEnabled", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\GameBar", "name": "ShowStartupPanel", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR", "name": "AllowGameDVR", "value": 0 }
+    ]
+  },
+  {
+    "id": "explorer.snappy",
+    "group": "Удобство",
+    "title": "Быстрее меню и проводник",
+    "what": "Меньше задержка перед открытием подменю, без «встряхивания» окон и всплывающих подсказок о новых приложениях.",
+    "effect": "Интерфейс кажется отзывчивее. На игры не влияет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "none",
+    "steps": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "MenuShowDelay", "value": "100", "valueType": "String" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "DisallowShaking", "value": 1, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "Start_NotifyNewApps", "value": 0, "valueType": "DWord" },
+      { "type": "reg", "path": "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced", "name": "EnableBalloonTips", "value": 0, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKCU:\\Control Panel\\Desktop", "name": "MenuShowDelay", "value": "100" }
+    ]
+  },
+  {
+    "id": "myth.kernel.tweaks",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Скрытые параметры ядра, csrss «High», SystemPages, DisablePagingExecutive",
+    "what": "Набор недокументированных ключей Session Manager\\kernel, повышенный приоритет csrss.exe и старые настройки памяти из эпохи 32-битных систем.",
+    "effect": "Измеримой пользы на Windows 10/11 нет; часть ключей ядро просто игнорирует. pckit такое не пишет.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.qos.allgames",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "QoS-приоритет для сотен игр сразу",
+    "what": "Политики DSCP 46 для списка из ~500 exe-файлов.",
+    "effect": "Домашние роутеры и провайдеры метки DSCP обычно игнорируют. Для CS2 pckit ставит одну политику — этого достаточно.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.affinity",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Жёсткая привязка видеокарты, сети и USB к ядрам",
+    "what": "Политика прерываний «на конкретные ядра» для каждого устройства.",
+    "effect": "Выигрыш зависит от конкретного процессора и часто отрицательный: ядро с прерываниями может совпасть с игровым потоком. pckit такое не делает.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
+    "id": "myth.danger.optimizers",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Что оптимизаторы делают «заодно» и почему pckit так не делает",
+    "what": "Выключение HDCP и вытеснения на видеокарте, NetBT, автообновлений Windows и браузеров, запроса UAC на защищённом столе, длинных путей; перехват запуска Edge через Image File Execution Options; сотни «анти-телеметрийных» переменных среды (в том числе CI=1).",
+    "effect": "Ломает Netflix/Blu-ray, сетевые папки и принтеры, обновления безопасности, сборочные инструменты; ослабляет защиту. Прироста fps нет.",
+    "effectLevel": "плацебо",
+    "risk": "high",
+    "needs": "none"
   }
 ]
