@@ -2,7 +2,7 @@
 # pckit engine | common helpers (dot-sourced by pckit.ps1)
 
 # единая версия программы: окно, CLI, профили .pckit и сборка берут её отсюда
-$script:PckitVersion = '2.3.0'
+$script:PckitVersion = '2.4.0'
 $script:PckitEngineDir = $PSScriptRoot
 
 function Write-PckitLog {

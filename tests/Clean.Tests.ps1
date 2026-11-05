@@ -88,7 +88,7 @@ try {
     $paths = @(Get-PckitChromiumCachePaths -UserDataRoot $ud)
     Check 'Chromium-хелпер: 3 профиля, Default+Profile 1+Guest' ($paths.Count -eq 6) ($paths -join '; ')
     Check 'Chromium-хелпер: System Profile не берётся' (-not ($paths -match 'System Profile'))
-    Check 'Chromium-хелпер: Cache_Data вместо Cache там, где он есть' (($paths -contains (Join-Path $ud 'Default\Cache\Cache_Data')) -and ($paths -contains (Join-Path $ud 'Profile 1\Cache')))
+    Check 'Chromium-хелпер: Cache_Data вместо Cache там, где он есть' (@($paths | Where-Object { $_ -like '*\Default\Cache\Cache_Data' }).Count -eq 1 -and @($paths | Where-Object { $_ -like '*\Profile 1\Cache' }).Count -eq 1)
 
     $chromeT = [pscustomobject]@{ Id = 't.chrome'; Title = 't'; What = 'w'; Paths = $paths; Risk = 'low'; Admin = $false; Kind = 'dir'; Note = ''; Patterns = @(); Link = '' }
     $filesT = [pscustomobject]@{ Id = 't.files'; Title = 't'; What = 'w'; Paths = @((Join-Path $base 'Explorer')); Risk = 'low'; Admin = $false; Kind = 'files'; Note = ''; Patterns = @('thumbcache_*.db', 'iconcache_*.db'); Link = '' }
