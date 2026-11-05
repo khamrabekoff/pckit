@@ -1287,6 +1287,53 @@
     ]
   },
   {
+    "id": "cs2.priority.high",
+    "group": "CS2",
+    "expert": true,
+    "title": "CS2 всегда с высоким приоритетом процессора",
+    "what": "Windows запускает cs2.exe сразу с приоритетом «Высокий» (как правило в Process Lasso, но без программы в фоне).",
+    "effect": "Фоновые программы реже отнимают процессор у игры: меньше редких просадок, когда в фоне Discord, браузер или обновления. На мощном ПК с пустым фоном разницы почти нет.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "note": "Действует при следующем запуске CS2. Приоритет «Реального времени» pckit не ставит — он вешает систему.",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cs2.exe\\PerfOptions", "name": "CpuPriorityClass", "value": 3, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options\\cs2.exe\\PerfOptions", "name": "CpuPriorityClass", "value": 3 }
+    ]
+  },
+  {
+    "id": "foreground.boost",
+    "group": "Планировщик",
+    "expert": true,
+    "title": "Сильнее ускорять активное окно",
+    "what": "Планировщик Windows даёт программе на переднем плане (игре) втрое более длинные кванты времени, чем фоновым (Win32PrioritySeparation = 0x26).",
+    "effect": "Игра чуть реже уступает процессор фону. Похоже на «Foreground boosting» в Process Lasso. Эффект небольшой, на некоторых ПК не измерить.",
+    "effectLevel": "низкий",
+    "risk": "low",
+    "needs": "admin",
+    "steps": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl", "name": "Win32PrioritySeparation", "value": 38, "valueType": "DWord" }
+    ],
+    "verify": [
+      { "type": "reg", "path": "HKLM:\\SYSTEM\\CurrentControlSet\\Control\\PriorityControl", "name": "Win32PrioritySeparation", "value": 38 }
+    ]
+  },
+  {
+    "id": "myth.quickcpu.driver",
+    "group": "Мифы",
+    "expert": true,
+    "myth": true,
+    "title": "Утилиты «разгона» процессора с собственным драйвером",
+    "what": "QuickCPU и похожие программы ставят свой драйвер ядра для чтения датчиков, а парковку ядер, Turbo и частоты меняют обычными настройками схемы питания.",
+    "effect": "Всё полезное делает схема «Максимальная производительность» в pckit. Сторонний драйвер ядра — лишний риск для античитов (FACEIT, Vanguard). Это не разгон: частоты выше заводских они не поднимают.",
+    "effectLevel": "плацебо",
+    "risk": "low",
+    "needs": "none"
+  },
+  {
     "id": "risk.nv.hdcp.off",
     "group": "На свой риск",
     "expert": true, "danger": true,

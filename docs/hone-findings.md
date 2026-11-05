@@ -58,3 +58,7 @@
 Обычные: `nic.eee.off`, `wer.full.off`, `tasks.background.off`, `nv.telemetry.off`, `ntfs.lastaccess.off`, `browsers.background.off`, `edge.sidebar.off`, `gamedvr.policy.off`, `explorer.snappy`.
 Экспертные: `nic.lso.off`, `nv.pstate.max`, `gpu.msi.on`, `ntfs.8dot3.off`, `pca.off`, `svc.extra.off`.
 Мифы (только объяснение): `myth.kernel.tweaks`, `myth.qos.allgames`, `myth.affinity`, `myth.danger.optimizers`.
+## QuickCPU 6.8 и Process Lasso 19 (снимки `snapshots/qc/`)
+
+- **QuickCPU** при установке ставит драйвер ядра `hwdlink.sys` (служба `cbhardwarelink2`). Всё остальное — интерфейс к настройкам схемы питания: парковка ядер, масштабирование частоты, Turbo, «Performance», выбор схемы. Частоты выше заводских не поднимает. В pckit: карточка-миф `myth.quickcpu.driver`, полезное уже даёт `power.plan`.
+- **Process Lasso** ставит службу ProcessGovernor, две задачи, схему «Bitsum Highest Performance» (отличие от «Высокой» — 100% ядер без парковки, быстрее рост частоты, USB-энергосбережение). Остальное работает, только пока программа запущена: ProBalance, Gaming Mode (смена схемы при запуске игры), SmartTrim, правила приоритета/ядер/CPU Sets, foreground boost. В pckit: `cs2.priority.high` (IFEO PerfOptions, High) и `foreground.boost` (Win32PrioritySeparation=0x26), обе экспертные. Gaming Mode — кандидат на будущий «Игровой режим» pckit.
