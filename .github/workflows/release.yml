@@ -1,0 +1,48 @@
+name: release
+
+# Публикация: git tag v2.3.0 && git push origin v2.3.0
+# Windows-машина GitHub собирает pckit-by-odilbek.cmd, прогоняет тесты и выкладывает файл в Releases.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Build
+        shell: powershell
+        run: powershell -NoProfile -ExecutionPolicy Bypass -File .\build.ps1
+
+      - name: Tests
+        shell: powershell
+        run: |
+          $failed = @()
+          foreach ($t in Get-ChildItem -Path .\tests -Filter *.Tests.ps1) {
+            powershell -NoProfile -ExecutionPolicy Bypass -File $t.FullName
+            if ($LASTEXITCODE -ne 0) { $failed += $t.Name }
+          }
+          if ($failed.Count) { Write-Host ("FAILED: " + ($failed -join ", ")); exit 1 }
+
+      - name: Version must match the tag
+        shell: powershell
+        run: |
+          $v = ([regex]::Match((Get-Content .\engine\Common.ps1 -Raw), "PckitVersion = '([^']+)'")).Groups[1].Value
+          if ("v$v" -ne $env:GITHUB_REF_NAME) { Write-Host "tag $env:GITHUB_REF_NAME != version v$v"; exit 1 }
+
+      - name: Publish
+        uses: softprops/action-gh-release@v2
+        with:
+          name: pckit ${{ github.ref_name }}
+          files: |
+            dist/pckit-by-odilbek.cmd
+            dist/README.txt
+          body: |
+            Скачайте **pckit-by-odilbek.cmd** и запустите двойным щелчком. На вопрос Windows «Разрешить изменения?» — **Да**.
+            Если появится «Windows защитила ваш компьютер» — «Подробнее» → «Выполнить в любом случае» (файл без цифровой подписи).
+            Что нового — в разделе «2.3.0» файла PCKIT.md.

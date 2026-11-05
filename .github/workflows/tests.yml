@@ -9,7 +9,7 @@ jobs:
     # тесты рассчитаны на Windows PowerShell 5.1 — тот же, что у пользователей
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Сборка (проверка синтаксиса, BOM и JSON)
         shell: powershell
@@ -24,7 +24,7 @@ jobs:
             powershell -NoProfile -ExecutionPolicy Bypass -File $t.FullName
             if ($LASTEXITCODE -ne 0) { $failed += $t.Name }
           }
-          if ($failed.Count) { Write-Host ("Упали: " + ($failed -join ', ')); exit 1 }
+          if ($failed.Count) { Write-Host ("FAILED: " + ($failed -join ", ")); exit 1 }
 
       - name: Собранный файл
         uses: actions/upload-artifact@v4
@@ -36,7 +36,7 @@ jobs:
     # тесты отката и защиты профиля не зависят от Windows — быстрый прогон в PowerShell 7
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Undo.Tests (PowerShell 7)
         shell: pwsh
         run: ./tests/Undo.Tests.ps1
