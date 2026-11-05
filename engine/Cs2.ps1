@@ -75,12 +75,9 @@ function Invoke-PckitStepCs2Cfg {
     }
     try {
         $new = Set-PckitCfgBlockText -Text $old -Block $block
-        if ($exists) {
-            $bak = New-PckitFileBackup -Path $file
-            if ($Journal) { Add-PckitFileTracked -Journal $Journal -Target $file -BackupPath $bak }
-        } elseif ($Journal) {
-            Add-PckitCommandTracked -Journal $Journal -Undo ('del /f /q "{0}"' -f $file) -Note 'CS2: удалить созданный autoexec.cfg'
-        }
+        # копия на всякий случай; откат же убирает только блок pckit — правки пользователя после этого сохраняются
+        if ($exists) { [void](New-PckitFileBackup -Path $file) }
+        if ($Journal) { Add-PckitCs2Tracked -Journal $Journal -Kind 'cfg' -File $file -Created (-not $exists) }
         # без BOM: движок Source 2 читает cfg как обычный текст
         [IO.File]::WriteAllText($file, $new, (New-Object System.Text.UTF8Encoding($false)))
         return [pscustomobject]@{ Status = 'ok'; Message = ''; Failed = 0 }
@@ -250,9 +247,11 @@ function Invoke-PckitStepCs2Launch {
             $insert = "`n" + $indent + '"LaunchOptions"' + "`t`t" + (ConvertTo-PckitVdfString $new)
             $out = $text.Substring(0, $open.End) + $insert + $text.Substring($open.End)
         }
-        $bak = New-PckitFileBackup -Path $file
+        [void](New-PckitFileBackup -Path $file)
         [IO.File]::WriteAllText($file, $out, (New-Object System.Text.UTF8Encoding($false)))
-        if ($Journal) { Add-PckitFileTracked -Journal $Journal -Target $file -BackupPath $bak }
+        # в журнал — только добавленные параметры: откат уберёт их и не вернёт старую копию всего файла Steam
+        $added = @($add | Where-Object { $_.Trim() -and (' ' + $cur.Trim() + ' ') -notlike ('* ' + $_.Trim() + ' *') } | ForEach-Object { $_.Trim() })
+        if ($Journal) { Add-PckitCs2Tracked -Journal $Journal -Kind 'launch' -File $file -Added $added }
         return [pscustomobject]@{ Status = 'ok'; Message = ''; Failed = 0 }
     } catch {
         return [pscustomobject]@{ Status = 'fail'; Message = $_.Exception.Message; Failed = 1 }
@@ -268,4 +267,80 @@ function Test-PckitVerifyCs2Launch {
     $missing = @(@($Verify.add) | Where-Object { (' ' + $lo.Value + ' ') -notlike ('* ' + ([string]$_).Trim() + ' *') })
     $detail = if ($lo.Value) { ('сейчас: {0}' -f $lo.Value) } else { 'пусто' }
     return [pscustomobject]@{ Ok = ($missing.Count -eq 0); Detail = $detail; NotApplicable = $false }
+}
+
+# ---------- журнал CS2 (journal.cs2): откат убирает только то, что добавил pckit ----------
+
+function Add-PckitCs2Tracked {
+    param($Journal, [string]$Kind, [string]$File, [bool]$Created = $false, [string[]]$Added = @())
+    if (-not $Journal.Contains('cs2')) { $Journal.cs2 = New-Object System.Collections.ArrayList }
+    if ($Kind -eq 'launch' -and -not @($Added).Count) { return }
+    [void]$Journal.cs2.Add([pscustomobject]@{
+            kind    = $Kind
+            file    = $File
+            created = $Created
+            added   = @($Added)
+            at      = (Get-Date).ToString('s')
+        })
+}
+
+function Get-PckitCs2EntryTitle {
+    param($Entry)
+    if ([string]$Entry.kind -eq 'launch') { return ('параметры запуска CS2: убрать {0}' -f ((@($Entry.added)) -join ' ')) }
+    return 'autoexec.cfg: убрать блок pckit'
+}
+
+# убрать из строки параметров запуска то, что добавлял pckit
+function Remove-PckitLaunchOptions {
+    param([string]$Current, [string[]]$Remove)
+    $r = ' ' + $Current.Trim() + ' '
+    foreach ($opt in @($Remove)) {
+        $o = ([string]$opt).Trim()
+        if (-not $o) { continue }
+        $r = $r.Replace(' ' + $o + ' ', ' ')
+    }
+    return (($r -replace '\s+', ' ').Trim())
+}
+
+# убрать блок pckit из текста autoexec.cfg
+function Remove-PckitCfgBlockText {
+    param([string]$Text)
+    $pattern = '(?s)(\r?\n){0,2}' + [regex]::Escape($script:PckitCfgBegin) + '.*?' + [regex]::Escape($script:PckitCfgEnd) + '(\r?\n)?'
+    return [regex]::Replace($Text, $pattern, '')
+}
+
+# откат одной записи: { Status = ok|skip|fail; Message }
+function Restore-PckitCs2Entry {
+    param($Entry)
+    $file = [string]$Entry.file
+    try {
+        if (-not $file -or -not (Test-Path -LiteralPath $file)) { return [pscustomobject]@{ Status = 'skip'; Message = 'файла уже нет' } }
+        $text = [IO.File]::ReadAllText($file)
+        $enc = New-Object System.Text.UTF8Encoding($false)
+
+        if ([string]$Entry.kind -eq 'cfg') {
+            $new = Remove-PckitCfgBlockText -Text $text
+            if ($Entry.created -and -not $new.Trim()) { Remove-Item -LiteralPath $file -Force; return [pscustomobject]@{ Status = 'ok'; Message = 'файл удалён (его создал pckit)' } }
+            if ($new -ne $text) { [IO.File]::WriteAllText($file, $new, $enc) }
+            return [pscustomobject]@{ Status = 'ok'; Message = '' }
+        }
+
+        # localconfig.vdf: Steam держит его в памяти и перезапишет при выходе — менять только при закрытом Steam
+        if (@(Get-Process -Name 'steam' -ErrorAction SilentlyContinue).Count) {
+            return [pscustomobject]@{ Status = 'fail'; Message = 'закройте Steam (значок у часов → Выход) и отмените ещё раз' }
+        }
+        $tokens = Get-PckitVdfTokens -Text $text
+        $block = Find-PckitVdfBlock -Tokens $tokens -Path $script:PckitCs2AppPath
+        if (-not $block) { return [pscustomobject]@{ Status = 'skip'; Message = 'CS2 нет в профиле Steam' } }
+        $valTok = Find-PckitVdfValue -Tokens $tokens -Block $block -Key 'LaunchOptions'
+        if (-not $valTok) { return [pscustomobject]@{ Status = 'skip'; Message = 'параметров запуска уже нет' } }
+        $new = Remove-PckitLaunchOptions -Current $valTok.Value -Remove @($Entry.added)
+        if ($new -ne $valTok.Value) {
+            $out = $text.Substring(0, $valTok.Start) + (ConvertTo-PckitVdfString $new) + $text.Substring($valTok.End)
+            [IO.File]::WriteAllText($file, $out, $enc)
+        }
+        return [pscustomobject]@{ Status = 'ok'; Message = '' }
+    } catch {
+        return [pscustomobject]@{ Status = 'fail'; Message = $_.Exception.Message }
+    }
 }

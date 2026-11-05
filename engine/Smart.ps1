@@ -251,7 +251,7 @@ function Get-PckitSmartFindings {
         if (-not $pref.Exists -or (Get-PckitKvValue -Text ([string]$pref.Value) -Key 'GpuPreference') -ne '2') {
             [void]$f.Add((New-PckitFinding -Severity 'warn' -Title 'CS2 не закреплена за мощной видеокартой' `
                         -Detail 'У вас две видеокарты; Windows может запустить игру на встроенной.' `
-                        -FixAction 'gpu.cs2.highperf' -Hint 'Включается во вкладке «Игры» → «CS2 всегда на мощной видеокарте».'))
+                        -FixAction 'gpu.cs2.highperf' -Hint 'Включается во разделе «Настройки» → «CS2 всегда на мощной видеокарте».'))
         }
     }
 

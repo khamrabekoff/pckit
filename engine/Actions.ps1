@@ -415,7 +415,8 @@ function Invoke-PckitStepPowercfg {
         if ($LASTEXITCODE -ne 0) { return [pscustomobject]@{ Status = 'fail'; Message = ('powercfg код {0}' -f $LASTEXITCODE); Failed = 1 } }
         & powercfg /setactive $scheme 2>&1 | Out-Null
         if ($Journal) {
-            $undo = 'powercfg /setacvalueindex {0} {1} {2} {3} && powercfg /setdcvalueindex {0} {1} {2} {4} && powercfg /setactive {0}' -f $scheme, $sub, $set, $prev.Ac, $prev.Dc
+            # scheme_current: применить значения, не переключая схему (иначе откат снова включал бы «максимальную»)
+            $undo = 'powercfg /setacvalueindex {0} {1} {2} {3} && powercfg /setdcvalueindex {0} {1} {2} {4} && powercfg /setactive scheme_current' -f $scheme, $sub, $set, $prev.Ac, $prev.Dc
             Add-PckitCommandTracked -Journal $Journal -Undo $undo -Note 'настройка схемы питания'
         }
         return [pscustomobject]@{ Status = 'ok'; Message = ''; Failed = 0 }
@@ -580,7 +581,8 @@ function Invoke-PckitAction {
                         if ($LASTEXITCODE -ne 0) { & powercfg /setactive $high 2>$null | Out-Null }
 
                         if ($LASTEXITCODE -eq 0) {
-                            if ($Journal -and $prev) {
+                            # схема уже была нужной — откатывать нечего
+                            if ($Journal -and $prev -and $prev -ne (Get-PckitActivePowerPlan)) {
                                 Add-PckitCommandTracked -Journal $Journal -Undo ('powercfg /setactive {0}' -f $prev) -Note 'схема электропитания'
                             }
                             $status = 'ok'

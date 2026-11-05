@@ -170,17 +170,7 @@ function Get-PckitStoreApps {
 function Get-PckitFileItems {
     param([switch]$SkipSizes)
 
-    $defs = @(
-        @{ Id = 'files.desktop'; Title = 'Рабочий стол'; Path = '%USERPROFILE%\Desktop'; Mode = 'copy'; Default = $true; Risk = 'low' }
-        @{ Id = 'files.documents'; Title = 'Документы'; Path = '%USERPROFILE%\Documents'; Mode = 'copy'; Default = $true; Risk = 'low' }
-        @{ Id = 'files.pictures'; Title = 'Изображения'; Path = '%USERPROFILE%\Pictures'; Mode = 'copy'; Default = $false; Risk = 'low' }
-        @{ Id = 'files.downloads'; Title = 'Загрузки'; Path = '%USERPROFILE%\Downloads'; Mode = 'copy'; Default = $false; Risk = 'low' }
-        @{ Id = 'files.videos'; Title = 'Видео'; Path = '%USERPROFILE%\Videos'; Mode = 'reference'; Default = $false; Risk = 'low' }
-        @{ Id = 'files.music'; Title = 'Музыка'; Path = '%USERPROFILE%\Music'; Mode = 'reference'; Default = $false; Risk = 'low' }
-        @{ Id = 'files.savedgames'; Title = 'Сохранения игр'; Path = '%USERPROFILE%\Saved Games'; Mode = 'copy'; Default = $false; Risk = 'low' }
-        @{ Id = 'files.ssh'; Title = 'SSH-ключи (.ssh)'; Path = '%USERPROFILE%\.ssh'; Mode = 'copy'; Default = $false; Risk = 'high' }
-        @{ Id = 'files.gpg'; Title = 'GPG-ключи'; Path = '%APPDATA%\gnupg'; Mode = 'copy'; Default = $false; Risk = 'high' }
-    )
+    $defs = Get-PckitFileDefs
 
     $items = New-Object System.Collections.Generic.List[object]
     foreach ($d in $defs) {

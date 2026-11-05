@@ -1,6 +1,6 @@
 ﻿#Requires -Version 5.1
 <#
-    pckit 0.1 — выбрать, что сохранить с этого ПК, и вернуть это после переустановки Windows.
+    pckit (CLI) — выбрать, что сохранить с этого ПК, и вернуть это после переустановки Windows.
 
     Примеры:
         .\pckit.ps1 scan                       # что вообще есть на машине
@@ -114,7 +114,7 @@ switch ($Command) {
 
     'help' {
         Write-Host ''
-        Write-Host '  pckit — слепок ПК: что сохранить и как вернуть после переустановки Windows' -ForegroundColor Cyan
+        Write-Host ('  pckit {0} — слепок ПК: что сохранить и как вернуть после переустановки Windows' -f $script:PckitVersion) -ForegroundColor Cyan
         Write-Host ''
         Write-Host '  scan                        показать, что есть на машине (ничего не меняет)'
         Write-Host '  pack  -Preset work          собрать профиль (minimal | work | all)'

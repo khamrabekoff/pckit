@@ -14,7 +14,10 @@ function Copy-PckitTree {
     $fileExcludes = @()
     foreach ($p in $Exclude) {
         if (-not $p) { continue }
-        if ($p -match '[*?]') { $fileExcludes += $p } else { $dirExcludes += $p }
+        if ($p -match '[*?]') { $fileExcludes += $p }
+        # путь внутри папки (user_data\cache): robocopy /XD надёжно понимает только имя или полный путь
+        elseif ($p -match '\\') { $dirExcludes += (Join-Path $Source $p.Trim('\')) }
+        else { $dirExcludes += $p }
     }
 
     # /XJ: не заходить в junction-ссылки (иначе в AppData можно уйти по кругу или скопировать чужое)

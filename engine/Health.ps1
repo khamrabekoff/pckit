@@ -166,17 +166,17 @@ function Get-PckitHealthReport {
                 'gamedvr.off' {
                     [void]$findings.Add((New-PckitFinding -Severity 'info' -Title 'Game DVR записывает игру в фоне' `
                                 -Detail 'Фоновая запись забирает диск и память, иногда съедает 1–3% fps.' `
-                                -FixAction 'gamedvr.off' -Hint 'Можно отключить во вкладке «Игры».'))
+                                -FixAction 'gamedvr.off' -Hint 'Можно отключить во разделе «Настройки».'))
                 }
                 'mouse.accel.off' {
                     [void]$findings.Add((New-PckitFinding -Severity 'info' -Title 'Включено ускорение мыши' `
                                 -Detail 'Прицел «догоняет» движение: аим менее предсказуем. На fps не влияет.' `
-                                -FixAction 'mouse.accel.off' -Hint 'Отключается во вкладке «Игры».'))
+                                -FixAction 'mouse.accel.off' -Hint 'Отключается во разделе «Настройки».'))
                 }
                 'mmcss.games' {
                     [void]$findings.Add((New-PckitFinding -Severity 'info' -Title 'Приоритет игр в планировщике не настроен' `
                                 -Detail 'Игра конкурирует с фоновыми задачами за процессор.' `
-                                -FixAction 'mmcss.games' -Hint 'Настраивается во вкладке «Игры».'))
+                                -FixAction 'mmcss.games' -Hint 'Настраивается во разделе «Настройки».'))
                 }
             }
         }
@@ -307,7 +307,7 @@ function Get-PckitHealthReport {
     if ($journalCount -gt 0) {
         [void]$findings.Add((New-PckitFinding -Severity 'info' -Title ('В журнале {0} изменений — их можно отменить' -f $journalCount) `
                     -Detail ('журнал от {0}' -f $journal.created) `
-                    -Hint 'Кнопка «Отменить изменения» во вкладке «Вернуть» или «Игры».'))
+                    -Hint 'Кнопка «Отменить изменения» во вкладке «Вернуть» или «Настройки».'))
     }
 
     $bad = @($findings | Where-Object { $_.Severity -eq 'bad' }).Count
@@ -387,7 +387,7 @@ function Save-PckitHealthReport {
 
         if ($Report.JournalCount -gt 0) {
             [void]$sb.AppendLine('<h2>Журнал изменений</h2>')
-            [void]$sb.AppendLine(('<p class="muted">записей: {0}, от {1}. Откат — кнопка «Отменить всё» во вкладке «Сделано».</p>' -f $Report.JournalCount, $Report.JournalAge))
+            [void]$sb.AppendLine(('<p class="muted">записей: {0}, от {1}. Откат — кнопка «Отменить всё» во вкладке «История и отмена».</p>' -f $Report.JournalCount, $Report.JournalAge))
         }
 
         [void]$sb.AppendLine('</body></html>')
