@@ -4,3 +4,6 @@ tests/sandbox/out/
 *.png
 *.log
 *.pckit
+
+# снимки настроек ПК (pckit-diff)
+snapshots/
