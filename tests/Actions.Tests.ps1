@@ -33,8 +33,8 @@ try {
     $ids = @($actions | ForEach-Object { $_.id })
     Assert-That 'id уникальны' ($ids.Count -eq @($ids | Select-Object -Unique).Count)
 
-    $stepTypes = @('reg', 'regkv', 'powerplan', 'service', 'task', 'powercfg', 'hibernate', 'netpower', 'nvidia', 'cs2cfg', 'cs2launch', 'workgpu')
-    $verifyTypes = @('reg', 'regkv', 'powerplan', 'service', 'task', 'powercfg', 'netpower', 'nvidia', 'cs2cfg', 'cs2launch', 'workgpu')
+    $stepTypes = @('reg', 'regkv', 'powerplan', 'service', 'task', 'powercfg', 'hibernate', 'netpower', 'devreg', 'nvidia', 'cs2cfg', 'cs2launch', 'workgpu')
+    $verifyTypes = @('reg', 'regkv', 'powerplan', 'service', 'task', 'powercfg', 'netpower', 'devreg', 'nvidia', 'cs2cfg', 'cs2launch', 'workgpu')
 
     $bad = New-Object System.Collections.ArrayList
     foreach ($a in $actions) {
@@ -65,6 +65,24 @@ try {
     $mythAction = @($actions | Where-Object { $_.myth })[0]
     $mr = Invoke-PckitAction -Action $mythAction -Journal (New-PckitJournal) -Run:$false
     Assert-That 'myth: Invoke даёт skip' ($mr.Results[0].Status -eq 'skip')
+
+    # «на свой риск»: всегда expert, никогда не рекомендуется и не попадает в «Всё сразу»
+    $hwT = Get-PckitHardwareProfile
+    $dBad = @($actions | Where-Object { $_.danger } | Where-Object { -not $_.expert -or $_.myth -or (Get-PckitSmartAdvice -Action $_ -Hw $hwT).Recommended } | ForEach-Object { $_.id })
+    Assert-That 'danger: expert, не миф, не рекомендуется' (@($actions | Where-Object { $_.danger }).Count -gt 0 -and $dBad.Count -eq 0) ($dBad -join ', ')
+
+    # devreg: поиск устройств не падает и не даёт пустых путей; неизвестная цель — пусто и skip
+    $devBad = @()
+    foreach ($tg in 'display', 'net', 'tcpif', 'pcidisplay') {
+        foreach ($p in @(Get-PckitDevRegTargets -Step ([pscustomobject]@{ target = $tg; name = '*EEE'; ndi = $true; sub = 'x' }))) {
+            if (-not $p -or [string]$p -notlike 'HKLM:\*') { $devBad += ('{0}: "{1}"' -f $tg, $p) }
+        }
+    }
+    Assert-That 'devreg: пути устройств корректны' ($devBad.Count -eq 0) ($devBad -join '; ')
+    $none = [pscustomobject]@{ type = 'devreg'; target = 'nothing'; name = 'X'; value = 1 }
+    Assert-That 'devreg: нет устройств -> 0 путей' (@(Get-PckitDevRegTargets -Step $none).Count -eq 0)
+    Assert-That 'devreg: нет устройств -> skip' ((Invoke-PckitStepDevReg -Step $none -Run).Status -eq 'skip')
+    Assert-That 'devreg: проверка без устройств не падает' ((Test-PckitVerifyDevReg -Verify $none).Ok)
     Assert-That 'myth: Test даёт myth' ((Test-PckitActionState -Action $mythAction).Status -eq 'myth')
 
     $future = [pscustomobject]@{ id = 'x'; title = 'x'; minBuild = 999999; steps = @([pscustomobject]@{ type = 'hibernate' }); verify = @([pscustomobject]@{ type = 'netpower' }) }

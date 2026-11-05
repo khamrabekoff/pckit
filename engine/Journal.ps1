@@ -117,6 +117,8 @@ function Add-PckitRegTracked {
     # одно значение пишем один раз за партию; в новой партии — снова (её «до» нужно для отката только этой партии)
     foreach ($e in $Journal.registry) {
         if ($script:PckitBatchSince -and [string]$e.at -lt $script:PckitBatchSince) { continue }
+        # запись другого действия этой же партии — не наша: у каждого действия своё «до» (откат по одному)
+        if ($script:PckitCurrentAct -and [string]$e.act -and [string]$e.act -ne $script:PckitCurrentAct) { continue }
         if ($e.path -ieq $Path -and $e.name -ieq $Name) { $already = $e; break }
     }
     if (-not $already) {
@@ -143,6 +145,8 @@ function Remove-PckitRegTracked {
     # одно значение пишем один раз за партию; в новой партии — снова (её «до» нужно для отката только этой партии)
     foreach ($e in $Journal.registry) {
         if ($script:PckitBatchSince -and [string]$e.at -lt $script:PckitBatchSince) { continue }
+        # запись другого действия этой же партии — не наша: у каждого действия своё «до» (откат по одному)
+        if ($script:PckitCurrentAct -and [string]$e.act -and [string]$e.act -ne $script:PckitCurrentAct) { continue }
         if ($e.path -ieq $Path -and $e.name -ieq $Name) { $already = $e; break }
     }
     if (-not $already -and (Test-PckitRegValue -Path $Path -Name $Name)) {
@@ -285,16 +289,44 @@ function Get-PckitUndoCommandOrder {
 }
 
 function Restore-PckitJournal {
-    param($Journal, [switch]$Run, [string]$Since)
+    param($Journal, [switch]$Run, [string]$Since, [string]$ActionId)
 
     # -Since: откатить только то, что записано начиная с этого времени (последняя партия)
+    # -ActionId: откатить только записи одного действия (поле act, ставит Invoke-PckitActions)
     $sel = New-PckitJournal
     $rest = New-PckitJournal
     $rest.created = [string]$Journal.created
     foreach ($k in $script:PckitJournalKinds) {
         foreach ($e in @($Journal.$k)) {
             if (-not $e) { continue }
-            if (-not $Since -or [string]$e.at -ge $Since) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
+            $pick = if ($ActionId) { [string]$e.act -eq $ActionId } else { -not $Since -or [string]$e.at -ge $Since }
+            if ($pick) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
+        }
+    }
+    # откат одного действия, когда то же значение потом меняло другое действие: значение не трогаем
+    # (оно сейчас принадлежит более позднему), а наше «как было до pckit» передаём его записи —
+    # тогда выключение позднего действия вернёт настоящее исходное значение
+    $chained = 0
+    if ($ActionId) {
+        $keyOf = @{
+            registry = { param($x) ('{0}|{1}' -f ([string]$x.path).ToLowerInvariant(), ([string]$x.name).ToLowerInvariant()) }
+            nvidia   = { param($x) ('{0}|{1}' -f ([string]$x.exe).ToLowerInvariant(), [string]$x.id) }
+        }
+        foreach ($k in $keyOf.Keys) {
+            $keepSel = New-Object System.Collections.ArrayList
+            foreach ($e in @($sel.$k)) {
+                if (-not $e) { continue }
+                $key = & $keyOf[$k] $e
+                $later = $null
+                foreach ($o in @($rest.$k)) {
+                    if ($o -and (& $keyOf[$k] $o) -eq $key -and [string]$o.at -ge [string]$e.at) { $later = $o; break }
+                }
+                if (-not $later) { [void]$keepSel.Add($e); continue }
+                if ($k -eq 'registry') { $later.existed = $e.existed; $later.type = $e.type; $later.value = $e.value }
+                else { $later.restore = $e.restore; $later.value = $e.value }
+                $chained++
+            }
+            $sel.$k = $keepSel
         }
     }
     $Journal = $sel
@@ -310,6 +342,8 @@ function Restore-PckitJournal {
         [void]$result.Add([pscustomobject]@{ Kind = $Kind; Title = $Title; Status = $Status; Message = $Msg })
     }
     $script:__ok = 0; $script:__failed = 0
+    # переданное более поздней настройке — тоже «вернули»: значение уже не наше
+    for ($c = 0; $c -lt $chained; $c++) { & $note 'параметр' 'передан более поздней настройке' 'ok' '' 'registry' $null }
 
     # CS2: убрать только своё (параметр запуска, блок в autoexec.cfg), остальное пользователя не трогаем
     $cs2 = @($Journal.cs2)

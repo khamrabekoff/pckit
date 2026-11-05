@@ -295,6 +295,10 @@ function Test-PckitActionState {
                     $detail = 'настройки нет'
                 }
             }
+            'devreg' {
+                $r = Test-PckitVerifyDevReg -Verify $v
+                $ok = [bool]$r.Ok; $detail = [string]$r.Detail
+            }
             'netpower' {
                 $bad = @(Get-PckitNetPowerAdapters | Where-Object { $_.Allow -eq 'Enabled' })
                 $ok = ($bad.Count -eq 0)
@@ -444,6 +448,93 @@ function Invoke-PckitStepHibernate {
     }
 }
 
+# devreg: одно значение реестра на всех подходящих устройствах этого ПК.
+# target: display (ключ драйвера видеокарты, vendor), net (ключ драйвера физической сетевой карты),
+#         tcpif (TCP-параметры интерфейса физической карты), pcidisplay (Enum\PCI видеокарты + sub).
+# ndi: true — писать только если драйвер сетевой карты знает такой параметр (Ndi\Params\<name>).
+function Get-PckitDevRegTargets {
+    param($Step)
+
+    $paths = New-Object System.Collections.ArrayList
+    $physical = @()
+    if ([string]$Step.target -in 'net', 'tcpif') {
+        try { $physical = @(Get-NetAdapter -Physical -ErrorAction Stop) } catch { $physical = @() }
+    }
+    switch ([string]$Step.target) {
+        'display' {
+            $cls = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e968-e325-11ce-bfc1-08002be10318}'
+            foreach ($k in @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^\d{4}$' })) {
+                $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
+                if (-not $p) { continue }
+                if ($Step.vendor -and ([string]$p.ProviderName + ' ' + [string]$p.DriverDesc) -notmatch [regex]::Escape([string]$Step.vendor)) { continue }
+                [void]$paths.Add(('{0}\{1}' -f $cls, $k.PSChildName))
+            }
+        }
+        'net' {
+            $cls = 'HKLM:\SYSTEM\CurrentControlSet\Control\Class\{4d36e972-e325-11ce-bfc1-08002be10318}'
+            $guids = @($physical | ForEach-Object { ([string]$_.InterfaceGuid).ToLower() })
+            foreach ($k in @(Get-ChildItem -LiteralPath $cls -ErrorAction SilentlyContinue | Where-Object { $_.PSChildName -match '^\d{4}$' })) {
+                $id = [string](Get-ItemProperty -LiteralPath $k.PSPath -Name NetCfgInstanceId -ErrorAction SilentlyContinue).NetCfgInstanceId
+                if (-not $id -or $guids -notcontains $id.ToLower()) { continue }
+                $base = '{0}\{1}' -f $cls, $k.PSChildName
+                if ($Step.ndi -and -not (Test-Path -LiteralPath ('{0}\Ndi\Params\{1}' -f $base, [string]$Step.name))) { continue }
+                [void]$paths.Add($base)
+            }
+        }
+        'tcpif' {
+            foreach ($a in $physical) {
+                $p = 'HKLM:\SYSTEM\CurrentControlSet\Services\Tcpip\Parameters\Interfaces\{0}' -f ([string]$a.InterfaceGuid).ToLower()
+                if (Test-Path -LiteralPath $p) { [void]$paths.Add($p) }
+            }
+        }
+        'pcidisplay' {
+            $devs = @()
+            try { $devs = @(Get-PnpDevice -Class Display -PresentOnly -ErrorAction Stop | Where-Object { $_.InstanceId -like 'PCI\*' }) } catch { $devs = @() }
+            foreach ($d in $devs) {
+                if ($Step.vendor -and ([string]$d.Manufacturer + ' ' + [string]$d.FriendlyName) -notmatch [regex]::Escape([string]$Step.vendor)) { continue }
+                [void]$paths.Add(('HKLM:\SYSTEM\CurrentControlSet\Enum\{0}\Device Parameters' -f $d.InstanceId))
+            }
+        }
+    }
+    if ($Step.sub) {
+        return @($paths | ForEach-Object { '{0}\{1}' -f $_, [string]$Step.sub })
+    }
+    return $paths.ToArray()
+}
+
+function Invoke-PckitStepDevReg {
+    param($Step, $Journal, [switch]$Run)
+
+    $targets = @(Get-PckitDevRegTargets -Step $Step)
+    if ($targets.Count -eq 0) { return [pscustomobject]@{ Status = 'skip'; Message = 'нет подходящих устройств'; Failed = 0 } }
+    $type = if ($Step.valueType) { [string]$Step.valueType } else { 'DWord' }
+    $value = $Step.value
+    if ($type -eq 'Binary') { $value = ConvertTo-PckitByteArray -Value $Step.value }
+    if (-not $Run) {
+        return [pscustomobject]@{ Status = 'dry'; Message = ('{0} = {1} ({2} шт.)' -f $Step.name, $Step.value, $targets.Count); Failed = 0 }
+    }
+    $failed = 0
+    $msgs = New-Object System.Collections.ArrayList
+    foreach ($p in $targets) {
+        try { Add-PckitRegTracked -Journal $Journal -Path $p -Name ([string]$Step.name) -Value $value -Type $type }
+        catch { $failed++; [void]$msgs.Add($_.Exception.Message) }
+    }
+    if ($failed -gt 0) { return [pscustomobject]@{ Status = 'fail'; Message = ($msgs -join '; '); Failed = $failed } }
+    return [pscustomobject]@{ Status = 'ok'; Message = ''; Failed = 0 }
+}
+
+function Test-PckitVerifyDevReg {
+    param($Verify)
+    $targets = @(Get-PckitDevRegTargets -Step $Verify)
+    if ($targets.Count -eq 0) { return [pscustomobject]@{ Ok = $true; Detail = 'нет подходящих устройств' } }
+    $bad = 0
+    foreach ($p in $targets) {
+        $s = Get-PckitRegState -Path $p -Name ([string]$Verify.name)
+        if (-not $s.Exists -or [string]$s.Value -ne [string]$Verify.value) { $bad++ }
+    }
+    return [pscustomobject]@{ Ok = ($bad -eq 0); Detail = ('{0}: {1} из {2} устройств' -f $Verify.name, ($targets.Count - $bad), $targets.Count) }
+}
+
 function Invoke-PckitStepNetPower {
     param($Step, $Journal, [switch]$Run)
 
@@ -567,6 +658,10 @@ function Invoke-PckitAction {
                 $r = Invoke-PckitStepHibernate -Step $step -Journal $Journal -Run:$Run
                 $status = $r.Status; $msg = $r.Message; $failed += $r.Failed
             }
+            'devreg' {
+                $r = Invoke-PckitStepDevReg -Step $step -Journal $Journal -Run:$Run
+                $status = $r.Status; $msg = $r.Message; $failed += $r.Failed
+            }
             'netpower' {
                 $r = Invoke-PckitStepNetPower -Step $step -Journal $Journal -Run:$Run
                 $status = $r.Status; $msg = $r.Message; $failed += $r.Failed
@@ -644,8 +739,19 @@ function Invoke-PckitActions {
     foreach ($action in $ordered) {
         $i++
         Write-Progress -Activity 'Применение настроек' -Status $action.title -PercentComplete (($i / $total) * 100)
+        $before = @{}
+        foreach ($k in $script:PckitJournalKinds) { $before[$k] = @($journal.$k).Count }
+        $script:PckitCurrentAct = [string]$action.id
         $r = Invoke-PckitAction -Action $action -Journal $journal -Run:$Run
+        $script:PckitCurrentAct = $null
         [void]$results.Add($r)
+        # метка действия на новых записях журнала: по ней переключатель в UI откатывает одно действие
+        foreach ($k in $script:PckitJournalKinds) {
+            $list = @($journal.$k)
+            for ($j = $before[$k]; $j -lt $list.Count; $j++) {
+                if ($list[$j]) { $list[$j] | Add-Member -NotePropertyName act -NotePropertyValue ([string]$action.id) -Force }
+            }
+        }
     }
     Write-Progress -Activity 'Применение настроек' -Completed
     $script:PckitBatchSince = $null

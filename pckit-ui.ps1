@@ -472,6 +472,54 @@ $homeProgress.AutoSize = $true
 $homeProgress.ForeColor = [System.Drawing.Color]::FromArgb(110, 110, 120)
 $tabHome.Controls.Add($homeProgress)
 
+# счётчик оптимизаций: «включено N из M подобранных» с полоской — клик ведёт в список настроек
+$script:Score = $null
+$homeScore = New-Object System.Windows.Forms.Panel
+$homeScore.Size = New-Object System.Drawing.Size(300, 86)
+$homeScore.Location = New-Object System.Drawing.Point(600, 16)
+$homeScore.Cursor = [System.Windows.Forms.Cursors]::Hand
+$homeScore.Visible = $false
+$homeScore.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+$homeScore.AccessibleName = 'Оптимизация под ваш ПК'
+$homeScore.Add_Paint({
+        param($s, $e)
+        $g = $e.Graphics
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $g.Clear($script:Theme.Bg)
+        $rect = New-Object System.Drawing.Rectangle(0, 0, ($s.Width - 1), ($s.Height - 1))
+        $path = New-PckitRoundPath -Rect $rect -Radius 8
+        $cb = New-Object System.Drawing.SolidBrush($script:Theme.Card); $g.FillPath($cb, $path); $cb.Dispose()
+        $pen = New-Object System.Drawing.Pen($script:Theme.Border, 1); $g.DrawPath($pen, $path); $pen.Dispose(); $path.Dispose()
+        $sc = $script:Score
+        if (-not $sc) { return }
+        $big = New-Object System.Drawing.Font('Segoe UI Semibold', 20)
+        $small = New-Object System.Drawing.Font('Segoe UI', 9)
+        $num = ('{0} / {1}' -f $sc.On, $sc.All)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $num, $big, (New-Object System.Drawing.Point(14, 6)), $script:Theme.Text)
+        $nw = [System.Windows.Forms.TextRenderer]::MeasureText($num, $big).Width
+        $cap = if ($sc.All -and $sc.On -ge $sc.All) { 'всё подобранное включено' } else { 'подобранных настроек включено' }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $cap, $small, (New-Object System.Drawing.Rectangle((14 + $nw), 12, ($s.Width - $nw - 24), 32)), $script:Theme.Muted, [System.Windows.Forms.TextFormatFlags]'WordBreak, Left, VerticalCenter')
+        # полоска прогресса
+        $bar = New-Object System.Drawing.Rectangle(16, 54, ($s.Width - 32), 8)
+        $bp = New-PckitRoundPath -Rect $bar -Radius 4
+        $bb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(229, 229, 229)); $g.FillPath($bb, $bp); $bb.Dispose(); $bp.Dispose()
+        if ($sc.All -gt 0 -and $sc.On -gt 0) {
+            $fw = [Math]::Max(8, [int]($bar.Width * [Math]::Min(1, $sc.On / $sc.All)))
+            $fr = New-Object System.Drawing.Rectangle($bar.X, $bar.Y, $fw, $bar.Height)
+            $fp = New-PckitRoundPath -Rect $fr -Radius 4
+            $col = if ($sc.On -ge $sc.All) { [System.Drawing.Color]::FromArgb(16, 124, 16) } else { $script:Theme.Accent }
+            $fb = New-Object System.Drawing.SolidBrush($col); $g.FillPath($fb, $fp); $fb.Dispose(); $fp.Dispose()
+        }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ('всего включено настроек: {0}' -f $sc.Total), $small, (New-Object System.Drawing.Point(14, 64)), $script:Theme.Muted)
+        $big.Dispose(); $small.Dispose()
+    })
+$homeScore.Add_Click({
+        $tabs.SelectedTab = $tabGame
+        $gameFilter.SelectedItem = $(if ($script:Score -and $script:Score.On -lt $script:Score.All) { 'Ещё не включено' } else { 'Подобрано под мой ПК' })
+        Update-NavSelection
+    })
+$tabHome.Controls.Add($homeScore)
+
 function New-HomeCard {
     param(
         [string]$Icon,
@@ -631,6 +679,12 @@ function Set-HomeLayout {
         foreach ($ch in $c.Controls) { if ($ch -is [System.Windows.Forms.Label] -and $ch.Width -gt 100) { $ch.Width = [Math]::Max(200, $c.Width - 100) } }
     }
     if ($homeMore) { $homeMore.Top = $bottom + 14; $homeProgress.Top = $bottom + 42 } else { $homeProgress.Top = $bottom + 12 }
+    if ($homeScore) {
+        $homeScore.Left = $w - $gap - $homeScore.Width; $homeScore.Top = 16
+        # строки слева не заезжают под счётчик
+        $maxW = [Math]::Max(200, $homeScore.Left - 40)
+        foreach ($l in @($homeStatus, $homeHw, $homeNext)) { if ($l) { $l.MaximumSize = New-Object System.Drawing.Size($maxW, 0) } }
+    }
 }
 # иконки — символы шрифта Segoe MDL2 Assets
 $script:Icons = @{
@@ -936,7 +990,7 @@ $gameFilter = New-Object System.Windows.Forms.ComboBox
 $gameFilter.DropDownStyle = 'DropDownList'
 $gameFilter.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $gameFilter.Size = New-Object System.Drawing.Size(200, 24)
-[void]$gameFilter.Items.AddRange(@('Все настройки', 'Подобрано под мой ПК', 'Ещё не включено', 'Мифы и плацебо'))
+[void]$gameFilter.Items.AddRange(@('Все настройки', 'Подобрано под мой ПК', 'Ещё не включено', 'На свой риск', 'Мифы и плацебо'))
 $gameFilter.SelectedIndex = 0
 $gameFilter.AccessibleName = 'Показать'
 $gameTop.Controls.Add($gameFilter)
@@ -1978,9 +2032,14 @@ function Get-UiHardware {
 
 # «рекомендуемые» — подобраны под этот ПК: высокий/средний эффект, без экспертных и мифов,
 # с учётом железа (requires / skipIf / boostIf в actions.json)
+$script:RecCache = @{}   # железо за запуск не меняется — подбор считаем один раз на настройку
 function Test-ActionRecommended {
     param($Action)
-    return [bool](Get-PckitSmartAdvice -Action $Action -Hw (Get-UiHardware)).Recommended
+    $id = [string]$Action.id
+    if (-not $script:RecCache.ContainsKey($id)) {
+        $script:RecCache[$id] = [bool](Get-PckitSmartAdvice -Action $Action -Hw (Get-UiHardware)).Recommended
+    }
+    return $script:RecCache[$id]
 }
 
 function Get-ActionReason {
@@ -2047,6 +2106,17 @@ function Update-GameStatuses {
         $item.ToolTipText = ("{0}`r`nСейчас: {1}. {2}" -f $item.Tag.what, $item.SubItems[3].Text, $(if ($s.Detail) { '(' + $s.Detail + ')' } else { '' }))
     }
     $script:GameStatusBase = ('включено: {0} из {1}' -f $applied, $applicable)
+    # счётчик на главной: сколько из подобранного под этот ПК уже включено
+    $recOn = 0; $recAll = 0
+    foreach ($item in $script:GameItems) {
+        if (-not (Test-ActionRecommended $item.Tag)) { continue }
+        $t = [string]$item.SubItems[3].Text
+        if ($t -notin 'включено', 'частично', 'выключено') { continue }
+        $recAll++
+        if ($t -eq 'включено') { $recOn++ }
+    }
+    $script:Score = [pscustomobject]@{ On = $recOn; All = $recAll; Total = $applied }
+    if ($homeScore) { $homeScore.Visible = $true; $homeScore.Invalidate() }
     $gameStatus.Text = $script:GameStatusBase
     Update-GameFilter
 }
@@ -2066,9 +2136,10 @@ function Update-GameFilter {
             $state = [string]$item.SubItems[3].Text
             $show = switch ($mode) {
                 'Подобрано под мой ПК' { [bool]$item.Text.StartsWith('★') }
-                'Ещё не включено' { -not $a.myth -and $state -in 'выключено', 'частично' }
+                'Ещё не включено' { -not $a.myth -and -not $a.danger -and $state -in 'выключено', 'частично' }
+                'На свой риск' { [bool]$a.danger }
                 'Мифы и плацебо' { [bool]$a.myth }
-                default { -not $a.myth }
+                default { -not $a.myth -and -not $a.danger }
             }
             if ($show -and $q) {
                 $hay = ('{0} {1} {2} {3}' -f $a.title, $a.what, $a.group, $item.SubItems[1].Text)
@@ -2088,7 +2159,7 @@ function Update-GameFilter {
 }
 
 # порядок разделов: сначала самое заметное для игры
-$script:GameGroupOrder = @('Видеокарта', 'CS2', 'Работа', 'Питание', 'Игровой режим', 'Планировщик', 'Ввод', 'Графика', 'Сеть', 'Фон', 'Исправления', 'Удобство', 'Конфиденциальность', 'Службы и задачи', 'Мифы')
+$script:GameGroupOrder = @('Видеокарта', 'CS2', 'Работа', 'Питание', 'Игровой режим', 'Планировщик', 'Ввод', 'Графика', 'Сеть', 'Фон', 'Исправления', 'Удобство', 'Конфиденциальность', 'Службы и задачи', 'На свой риск', 'Мифы')
 
 function Initialize-GameTab {
     $script:Actions = @(Get-PckitActions -Directory (Join-Path $script:Root 'data'))
@@ -2116,6 +2187,7 @@ function Initialize-GameTab {
     foreach ($a in $script:Actions) {
         $titleText = [string]$a.title
         if ($a.myth) { $titleText = 'Миф: ' + $titleText }
+        elseif ($a.danger) { $titleText = '⛔ ' + $titleText }
         elseif ($a.expert) { $titleText = '⚠ ' + $titleText }
         $adv = Get-PckitSmartAdvice -Action $a -Hw $hw
         if ($adv.Recommended -and -not $a.myth) { $titleText = '★ ' + $titleText }
@@ -2618,7 +2690,10 @@ function Invoke-FpsMeasure {
         if ($Which -eq 'до') { $script:FpsBefore = $fps } else { $script:FpsAfter = $fps }
         Update-FpsLabel
         [void][System.Windows.Forms.MessageBox]::Show(
-            ("FPS «{0}»: средний {1:N0}, 1% low {2:N0}, 0.1% low {3:N0}, 99% кадров быстрее {4:N1} мс." -f $Which, [double]$fps.AvgFps, [double]$fps.Low1Fps, [double]$fps.Low01Fps, [double]$fps.P99FrameMs),
+            (("FPS «{0}»: средний {1:N0}, 1% low {2:N0}, 0.1% low {3:N0}, 99% кадров быстрее {4:N1} мс." -f $Which, [double]$fps.AvgFps, [double]$fps.Low1Fps, [double]$fps.Low01Fps, [double]$fps.P99FrameMs) +
+                $(if ([double]$fps.AvgFps -gt 0 -and [double]$fps.Low1Fps / [double]$fps.AvgFps -lt 0.4) {
+                    "`r`n`r`n1% low меньше 40% от среднего — кадры идут неровно (микрофризы). Обычно помогает: XMP/EXPO в BIOS, fps_max в CS2, закрыть браузер и оверлеи. Подробнее — «Проверка»."
+                } else { '' })),
             'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
     } catch {
         Update-FpsLabel
@@ -3934,10 +4009,12 @@ $gamePresetButton.Add_Click({
 $gameApplyButton.Add_Click({
         $ids = @()
         $expertTitles = @()
+        $dangerTitles = @()
         foreach ($item in $script:GameItems) {
             if (-not $item.Checked) { continue }
             $ids += [string]$item.Tag.id
-            if ($item.Tag.expert) { $expertTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
+            if ($item.Tag.danger) { $dangerTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
+            elseif ($item.Tag.expert) { $expertTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
         }
         if (-not $ids.Count) {
             [void][System.Windows.Forms.MessageBox]::Show('Отметьте хотя бы одно действие.', 'pckit by odilbek',
@@ -3951,6 +4028,14 @@ $gameApplyButton.Add_Click({
                 ("Отмечены экспертные настройки — они отключают службы и задачи Windows:`r`n`r`n" + ($expertTitles -join "`r`n") +
                     "`r`n`r`nРеальный выигрыш небольшой, а часть функций Windows перестанет работать. Всё отменяется кнопкой «Отменить изменения». Продолжить?"),
                 'pckit by odilbek — эксперт', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning,
+                [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+            if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+        }
+        if ($run -and $dangerTitles.Count) {
+            $warn = [System.Windows.Forms.MessageBox]::Show(
+                ("НА СВОЙ СТРАХ И РИСК. Эти настройки не проверены как полезные и могут сломать часть Windows:`r`n`r`n" + ($dangerTitles -join "`r`n") +
+                    "`r`n`r`nПрирост не гарантирован, на части ПК будет хуже. Применяйте по одной, проверяйте FPS и стабильность, при проблемах — «Отменить изменения». Точно продолжить?"),
+                'pckit by odilbek — на свой риск', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Stop,
                 [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
             if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
         }

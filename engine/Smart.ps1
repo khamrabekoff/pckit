@@ -65,6 +65,7 @@ function Get-PckitSmartAdvice {
     $rec = (-not $Action.expert) -and ([string]$Action.effectLevel -in 'высокий', 'средний')
     $reason = if ($rec) { 'подходит вашему ПК' } else { 'по желанию' }
     if ($Action.expert) { $reason = 'экспертная настройка — по желанию' }
+    if ($Action.danger) { $rec = $false; $reason = 'на свой страх и риск — для тестов' }
 
     if ($Action.boostIf -and (Test-PckitHwCondition -Cond $Action.boostIf -Hw $Hw)) {
         $rec = $true
@@ -215,6 +216,35 @@ function Get-PckitSmartFindings {
                         -Detail 'Reflex снижает задержку ввода на видеокартах NVIDIA, особенно когда карта загружена на 100%.' `
                         -Hint 'CS2 → Настройки → Видео → Дополнительно → NVIDIA Reflex Low Latency: «Вкл.».'))
         }
+        # fps_max: ровные кадры важнее рекорда среднего. Ищем ограничение там, где игра его хранит
+        # (настройки игрока, ставятся из консоли или меню) и в autoexec — он выполняется позже и главнее
+        $cap = $null
+        try {
+            if ($v.File) {
+                # fps_max игра хранит в machine_convars (на этот ПК), в старых версиях — в user_convars
+                foreach ($n in 'cs2_user_convars_0_slot0.vcfg', 'cs2_machine_convars.vcfg') {
+                    $uc = Join-Path (Split-Path -Parent $v.File) $n
+                    if (-not (Test-Path -LiteralPath $uc)) { continue }
+                    $m = [regex]::Match([IO.File]::ReadAllText($uc), '"fps_max"\s+"(\d+)"')
+                    if ($m.Success) { $cap = [int]$m.Groups[1].Value }
+                }
+            }
+        } catch { }
+        try {
+            $cfgDir = Get-PckitCs2CfgDir
+            $ae = if ($cfgDir) { Join-Path $cfgDir 'autoexec.cfg' } else { $null }
+            if ($ae -and (Test-Path -LiteralPath $ae)) {
+                $m = [regex]::Matches([IO.File]::ReadAllText($ae), '(?m)^\s*fps_max\s+"?(\d+)')
+                if ($m.Count) { $cap = [int]$m[$m.Count - 1].Groups[1].Value }
+            }
+        } catch { }
+        if ($null -eq $cap -or $cap -eq 0) {
+            $hzForCap = if ($maxHz) { [int]$maxHz } else { 0 }
+            $sugg = [math]::Max(300, [int]([math]::Ceiling($hzForCap * 1.5 / 10) * 10))
+            [void]$f.Add((New-PckitFinding -Severity 'info' -Title 'В CS2 не ограничен FPS (fps_max)' `
+                        -Detail 'Без ограничения процессор гонит максимум, и кадры идут неровно: средний FPS высокий, а 1% low проседает (микрофризы в перестрелках).' `
+                        -Hint ('В консоли CS2 или в autoexec.cfg: fps_max {0}. Сравните 1% low до и после — если стал выше, оставьте.' -f $sugg)))
+        }
         if ($v.Fullscreen -eq 0) {
             [void]$f.Add((New-PckitFinding -Severity 'info' -Title 'CS2 запущена в окне' `
                         -Detail 'Полноэкранный режим обычно даёт меньше задержку и чуть больше fps, чем оконный.' `
@@ -226,7 +256,7 @@ function Get-PckitSmartFindings {
     $jedec = @{ 'DDR4' = 2666; 'DDR5' = 4800; 'DDR3' = 1333 }
     if ($Hw.RamType -and $Hw.RamMhz -and $jedec.ContainsKey($Hw.RamType) -and $Hw.RamMhz -le $jedec[$Hw.RamType]) {
         [void]$f.Add((New-PckitFinding -Severity 'warn' -Title ('Память работает на {0} МГц — похоже, XMP/EXPO выключен' -f $Hw.RamMhz) `
-                    -Detail ('Для {0} это базовая частота. Большинство игровых планок умеют больше; в CS2 частота памяти напрямую влияет на 1% low.' -f $Hw.RamType) `
+                    -Detail ('Для {0} это базовая частота (норма без XMP). Большинство игровых планок умеют больше; в CS2 частота памяти напрямую влияет на 1% low.' -f $Hw.RamType) `
                     -Hint 'В BIOS включите профиль XMP (Intel) или DOCP/EXPO (AMD). pckit сам BIOS не трогает.'))
     }
     if ($Hw.RamGb -and $Hw.RamGb -lt 16) {

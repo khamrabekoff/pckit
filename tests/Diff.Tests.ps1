@@ -36,6 +36,8 @@ $a = Join-Path $tmp 'a.json'; $b = Join-Path $tmp 'b.json'
 [IO.File]::WriteAllText($b, (New-Snap @{ 'HKCU\X|Same' = 'DWord:1'; 'HKCU\X|Changed' = 'DWord:1'; 'HKCU\X|New' = 'DWord:7'; 'HKCU\Explorer\UserAssist|noise' = 'y' } @{ 'SysMain' = 'Disabled; svchost' }), $utf8)
 $report = Join-Path $tmp 'report.md'
 $out = (& powershell -NoProfile -ExecutionPolicy Bypass -File $tool -Before $a -After $b -Report $report) -join "`n"
+# вывод дочернего powershell идёт в кодировке консоли (стрелка → становится ?) — проверяем по файлу отчёта
+if (Test-Path -LiteralPath $report) { $out = $out + "`n" + [IO.File]::ReadAllText($report) }
 Check 'изменённое значение показано' ($out -match 'HKCU\\X\|Changed: DWord:0 → DWord:1')
 Check 'добавленное значение показано' ($out -match '\+` HKCU\\X\|New = DWord:7')
 Check 'удалённое значение показано' ($out -match '-` HKCU\\X\|Gone')

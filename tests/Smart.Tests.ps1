@@ -220,6 +220,39 @@ try {
     $left = Read-PckitJournal
     Assert-That 'партия: в журнале осталась только ранняя запись' (@($left.registry).Count -eq 1 -and $left.registry[0].name -eq 'A' -and @($left.nvidia).Count -eq 0)
 
+    # ---------- откат одного действия (-ActionId, переключатель в UI) ----------
+    Set-ItemProperty -LiteralPath $testKey -Name 'A' -Value 'a0'
+    Set-ItemProperty -LiteralPath $testKey -Name 'B' -Value 'b0'
+    Save-PckitJournal -Journal (New-PckitJournal) | Out-Null
+    $acts = @(
+        [pscustomobject]@{ id = 't.a'; title = 'A'; steps = @([pscustomobject]@{ type = 'reg'; path = $testKey; name = 'A'; value = 'a1'; valueType = 'String' }) },
+        [pscustomobject]@{ id = 't.b'; title = 'B'; steps = @([pscustomobject]@{ type = 'reg'; path = $testKey; name = 'B'; value = 'b1'; valueType = 'String' }) }
+    )
+    $ar = Invoke-PckitActions -Actions $acts -Run
+    $jj = Read-PckitJournal
+    Assert-That 'действие: записи помечены act' (@($jj.registry | Where-Object { $_.act -eq 't.a' }).Count -eq 1 -and @($jj.registry | Where-Object { $_.act -eq 't.b' }).Count -eq 1) (($jj.registry | ForEach-Object { "$($_.name)=$($_.act)" }) -join ',')
+    [void](Restore-PckitJournal -Journal $jj -Run -ActionId 't.a')
+    $p = Get-ItemProperty -LiteralPath $testKey
+    Assert-That 'действие: A откатился, B остался' ($p.A -eq 'a0' -and $p.B -eq 'b1') ('A={0} B={1}' -f $p.A, $p.B)
+    $left = Read-PckitJournal
+    Assert-That 'действие: в журнале осталась только запись B' (@($left.registry).Count -eq 1 -and $left.registry[0].name -eq 'B')
+    [void](Restore-PckitJournal -Journal $left -Run)
+
+    # два действия меняют одно значение: выключение первого не ломает второе, а выключение второго возвращает исходное
+    Set-ItemProperty -LiteralPath $testKey -Name 'A' -Value 'a0'
+    Save-PckitJournal -Journal (New-PckitJournal) | Out-Null
+    $acts = @(
+        [pscustomobject]@{ id = 't.x'; title = 'X'; steps = @([pscustomobject]@{ type = 'reg'; path = $testKey; name = 'A'; value = 'x1'; valueType = 'String' }) },
+        [pscustomobject]@{ id = 't.y'; title = 'Y'; steps = @([pscustomobject]@{ type = 'reg'; path = $testKey; name = 'A'; value = 'y1'; valueType = 'String' }) }
+    )
+    [void](Invoke-PckitActions -Actions $acts -Run)
+    Assert-That 'общее значение: у каждого действия своя запись' (@((Read-PckitJournal).registry | Where-Object { $_.act }).Count -eq 2)
+    $ux = Restore-PckitJournal -Journal (Read-PckitJournal) -Run -ActionId 't.x'
+    Assert-That 'общее значение: выключили первое — значение второго осталось' ((Get-ItemProperty -LiteralPath $testKey).A -eq 'y1' -and @($ux.Items).Count -ge 1) (Get-ItemProperty -LiteralPath $testKey).A
+    [void](Restore-PckitJournal -Journal (Read-PckitJournal) -Run -ActionId 't.y')
+    Assert-That 'общее значение: выключили второе — вернулось исходное' ((Get-ItemProperty -LiteralPath $testKey).A -eq 'a0') (Get-ItemProperty -LiteralPath $testKey).A
+    Assert-That 'общее значение: журнал пуст' (Test-PckitJournalEmpty -Journal (Read-PckitJournal))
+
     # повторная запись одной NVIDIA-настройки не теряет первое «до»
     $j = New-PckitJournal
     Add-PckitNvTracked -Journal $j -Exe 'cs2.exe' -Id 1 -Title 't' -Previous ([pscustomobject]@{ Status = 'ok'; UserSet = $true; Value = 5; Profile = 'p' })
