@@ -285,16 +285,18 @@ function Get-PckitUndoCommandOrder {
 }
 
 function Restore-PckitJournal {
-    param($Journal, [switch]$Run, [string]$Since)
+    param($Journal, [switch]$Run, [string]$Since, [string]$ActionId)
 
     # -Since: откатить только то, что записано начиная с этого времени (последняя партия)
+    # -ActionId: откатить только записи одного действия (поле act, ставит Invoke-PckitActions)
     $sel = New-PckitJournal
     $rest = New-PckitJournal
     $rest.created = [string]$Journal.created
     foreach ($k in $script:PckitJournalKinds) {
         foreach ($e in @($Journal.$k)) {
             if (-not $e) { continue }
-            if (-not $Since -or [string]$e.at -ge $Since) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
+            $pick = if ($ActionId) { [string]$e.act -eq $ActionId } else { -not $Since -or [string]$e.at -ge $Since }
+            if ($pick) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
         }
     }
     $Journal = $sel

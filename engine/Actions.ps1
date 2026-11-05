@@ -739,8 +739,17 @@ function Invoke-PckitActions {
     foreach ($action in $ordered) {
         $i++
         Write-Progress -Activity 'Применение настроек' -Status $action.title -PercentComplete (($i / $total) * 100)
+        $before = @{}
+        foreach ($k in $script:PckitJournalKinds) { $before[$k] = @($journal.$k).Count }
         $r = Invoke-PckitAction -Action $action -Journal $journal -Run:$Run
         [void]$results.Add($r)
+        # метка действия на новых записях журнала: по ней переключатель в UI откатывает одно действие
+        foreach ($k in $script:PckitJournalKinds) {
+            $list = @($journal.$k)
+            for ($j = $before[$k]; $j -lt $list.Count; $j++) {
+                if ($list[$j]) { $list[$j] | Add-Member -NotePropertyName act -NotePropertyValue ([string]$action.id) -Force }
+            }
+        }
     }
     Write-Progress -Activity 'Применение настроек' -Completed
     $script:PckitBatchSince = $null

@@ -472,6 +472,54 @@ $homeProgress.AutoSize = $true
 $homeProgress.ForeColor = [System.Drawing.Color]::FromArgb(110, 110, 120)
 $tabHome.Controls.Add($homeProgress)
 
+# счётчик оптимизаций: «включено N из M подобранных» с полоской — клик ведёт в список настроек
+$script:Score = $null
+$homeScore = New-Object System.Windows.Forms.Panel
+$homeScore.Size = New-Object System.Drawing.Size(300, 86)
+$homeScore.Location = New-Object System.Drawing.Point(600, 16)
+$homeScore.Cursor = [System.Windows.Forms.Cursors]::Hand
+$homeScore.Visible = $false
+$homeScore.AccessibleRole = [System.Windows.Forms.AccessibleRole]::PushButton
+$homeScore.AccessibleName = 'Оптимизация под ваш ПК'
+$homeScore.Add_Paint({
+        param($s, $e)
+        $g = $e.Graphics
+        $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+        $g.Clear($script:Theme.Bg)
+        $rect = New-Object System.Drawing.Rectangle(0, 0, ($s.Width - 1), ($s.Height - 1))
+        $path = New-PckitRoundPath -Rect $rect -Radius 8
+        $cb = New-Object System.Drawing.SolidBrush($script:Theme.Card); $g.FillPath($cb, $path); $cb.Dispose()
+        $pen = New-Object System.Drawing.Pen($script:Theme.Border, 1); $g.DrawPath($pen, $path); $pen.Dispose(); $path.Dispose()
+        $sc = $script:Score
+        if (-not $sc) { return }
+        $big = New-Object System.Drawing.Font('Segoe UI Semibold', 20)
+        $small = New-Object System.Drawing.Font('Segoe UI', 9)
+        $num = ('{0} / {1}' -f $sc.On, $sc.All)
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $num, $big, (New-Object System.Drawing.Point(14, 6)), $script:Theme.Text)
+        $nw = [System.Windows.Forms.TextRenderer]::MeasureText($num, $big).Width
+        $cap = if ($sc.All -and $sc.On -ge $sc.All) { 'всё подобранное включено' } else { 'подобранных настроек включено' }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, $cap, $small, (New-Object System.Drawing.Rectangle((14 + $nw), 12, ($s.Width - $nw - 24), 32)), $script:Theme.Muted, [System.Windows.Forms.TextFormatFlags]'WordBreak, Left, VerticalCenter')
+        # полоска прогресса
+        $bar = New-Object System.Drawing.Rectangle(16, 54, ($s.Width - 32), 8)
+        $bp = New-PckitRoundPath -Rect $bar -Radius 4
+        $bb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(229, 229, 229)); $g.FillPath($bb, $bp); $bb.Dispose(); $bp.Dispose()
+        if ($sc.All -gt 0 -and $sc.On -gt 0) {
+            $fw = [Math]::Max(8, [int]($bar.Width * [Math]::Min(1, $sc.On / $sc.All)))
+            $fr = New-Object System.Drawing.Rectangle($bar.X, $bar.Y, $fw, $bar.Height)
+            $fp = New-PckitRoundPath -Rect $fr -Radius 4
+            $col = if ($sc.On -ge $sc.All) { [System.Drawing.Color]::FromArgb(16, 124, 16) } else { $script:Theme.Accent }
+            $fb = New-Object System.Drawing.SolidBrush($col); $g.FillPath($fb, $fp); $fb.Dispose(); $fp.Dispose()
+        }
+        [System.Windows.Forms.TextRenderer]::DrawText($g, ('всего включено настроек: {0}' -f $sc.Total), $small, (New-Object System.Drawing.Point(14, 64)), $script:Theme.Muted)
+        $big.Dispose(); $small.Dispose()
+    })
+$homeScore.Add_Click({
+        $tabs.SelectedTab = $tabGame
+        $gameFilter.SelectedItem = $(if ($script:Score -and $script:Score.On -lt $script:Score.All) { 'Ещё не включено' } else { 'Подобрано под мой ПК' })
+        Update-NavSelection
+    })
+$tabHome.Controls.Add($homeScore)
+
 function New-HomeCard {
     param(
         [string]$Icon,
@@ -631,6 +679,12 @@ function Set-HomeLayout {
         foreach ($ch in $c.Controls) { if ($ch -is [System.Windows.Forms.Label] -and $ch.Width -gt 100) { $ch.Width = [Math]::Max(200, $c.Width - 100) } }
     }
     if ($homeMore) { $homeMore.Top = $bottom + 14; $homeProgress.Top = $bottom + 42 } else { $homeProgress.Top = $bottom + 12 }
+    if ($homeScore) {
+        $homeScore.Left = $w - $gap - $homeScore.Width; $homeScore.Top = 16
+        # строки слева не заезжают под счётчик
+        $maxW = [Math]::Max(200, $homeScore.Left - 40)
+        foreach ($l in @($homeStatus, $homeHw, $homeNext)) { if ($l) { $l.MaximumSize = New-Object System.Drawing.Size($maxW, 0) } }
+    }
 }
 # иконки — символы шрифта Segoe MDL2 Assets
 $script:Icons = @{
@@ -925,7 +979,7 @@ $gameTitle.AutoSize = $true
 $gameTop.Controls.Add($gameTitle)
 
 $gameHint = New-Object System.Windows.Forms.Label
-$gameHint.Text = 'Отметьте нужное. Каждое действие можно отменить — изменения записываются в журнал.'
+$gameHint.Text = 'Переключатель справа включает настройку сразу. Выключили — вернулось как было.'
 $gameHint.Location = New-Object System.Drawing.Point(16, 34)
 $gameHint.AutoSize = $true
 $gameHint.ForeColor = [System.Drawing.Color]::FromArgb(120, 120, 130)
@@ -972,17 +1026,23 @@ $gameList = New-Object System.Windows.Forms.ListView
 $gameList.AccessibleName = 'Настройки для игр'
 $gameList.Dock = 'Fill'
 $gameList.View = 'Details'
-$gameList.CheckBoxes = $true
+$gameList.CheckBoxes = $false
+$gameList.OwnerDraw = $true   # колонка «Сейчас» — переключатель вкл/выкл
+$gameList.HideSelection = $false
+# строки повыше, чтобы переключатель помещался: высоту строки задаёт список картинок
+$gameRowImages = New-Object System.Windows.Forms.ImageList
+$gameRowImages.ImageSize = New-Object System.Drawing.Size(1, 28)
+$gameList.SmallImageList = $gameRowImages
 $gameList.ShowItemToolTips = $true
 $gameList.ShowGroups = $true
 $gameList.FullRowSelect = $true
 $gameList.BorderStyle = 'FixedSingle'
 $gameList.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $gameList.BackColor = [System.Drawing.Color]::White
-[void]$gameList.Columns.Add('Действие', 340)
+[void]$gameList.Columns.Add('Настройка', 340)
 [void]$gameList.Columns.Add('Для вашего ПК', 330)
 [void]$gameList.Columns.Add('Эффект', 80)
-[void]$gameList.Columns.Add('Сейчас', 130)
+[void]$gameList.Columns.Add('Вкл / выкл', 150)
 [void]$gameList.Columns.Add('Раздел', 120)
 
 $gameBottom = New-Object System.Windows.Forms.Panel
@@ -998,9 +1058,9 @@ $gameDetails.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 80)
 $gameBottom.Controls.Add($gameDetails)
 
 $gameApplyButton = New-Object System.Windows.Forms.Button
-$gameApplyButton.Text = 'Применить отмеченные'
+$gameApplyButton.Text = 'Включить всё подобранное ★'
 $gameApplyButton.Location = New-Object System.Drawing.Point(14, 50)
-$gameApplyButton.Size = New-Object System.Drawing.Size(200, 32)
+$gameApplyButton.Size = New-Object System.Drawing.Size(230, 32)
 $gameApplyButton.BackColor = [System.Drawing.Color]::FromArgb(0, 120, 212)
 $gameApplyButton.ForeColor = [System.Drawing.Color]::White
 $gameApplyButton.FlatStyle = 'Flat'
@@ -1009,8 +1069,8 @@ $gameApplyButton.Font = New-Object System.Drawing.Font('Segoe UI Semibold', 9.5)
 $gameBottom.Controls.Add($gameApplyButton)
 
 $gameCheckButton = New-Object System.Windows.Forms.Button
-$gameCheckButton.Text = 'Проверить'
-$gameCheckButton.Location = New-Object System.Drawing.Point(224, 50)
+$gameCheckButton.Text = 'Обновить'
+$gameCheckButton.Location = New-Object System.Drawing.Point(254, 50)
 $gameCheckButton.Size = New-Object System.Drawing.Size(110, 32)
 $gameCheckButton.FlatStyle = 'System'
 $gameBottom.Controls.Add($gameCheckButton)
@@ -1020,11 +1080,12 @@ $gamePresetButton.Text = 'Подобрать под мой ПК'
 $gamePresetButton.Location = New-Object System.Drawing.Point(344, 50)
 $gamePresetButton.Size = New-Object System.Drawing.Size(210, 32)
 $gamePresetButton.FlatStyle = 'System'
+$gamePresetButton.Visible = $false   # отметок больше нет: переключатели и кнопка «Включить всё подобранное»
 $gameBottom.Controls.Add($gamePresetButton)
 
 $gameUndoButton = New-Object System.Windows.Forms.Button
-$gameUndoButton.Text = 'Отменить изменения'
-$gameUndoButton.Location = New-Object System.Drawing.Point(564, 50)
+$gameUndoButton.Text = 'Вернуть всё как было'
+$gameUndoButton.Location = New-Object System.Drawing.Point(374, 50)
 $gameUndoButton.Size = New-Object System.Drawing.Size(180, 32)
 $gameUndoButton.FlatStyle = 'System'
 $gameBottom.Controls.Add($gameUndoButton)
@@ -1032,20 +1093,21 @@ $gameBottom.Controls.Add($gameUndoButton)
 $gameDryRun = New-Object System.Windows.Forms.CheckBox
 $gameDryRun.Text = 'только показать'
 $gameDryRun.Checked = $false
+$gameDryRun.Visible = $false
 $gameDryRun.AutoSize = $true
 $gameDryRun.Location = New-Object System.Drawing.Point(680, 8)
 $gameBottom.Controls.Add($gameDryRun)
 
 $gameRestorePoint = New-Object System.Windows.Forms.CheckBox
-$gameRestorePoint.Text = 'точка восстановления'
+$gameRestorePoint.Text = 'точка восстановления перед первым изменением'
 $gameRestorePoint.Checked = $true
 $gameRestorePoint.AutoSize = $true
-$gameRestorePoint.Location = New-Object System.Drawing.Point(810, 8)
+$gameRestorePoint.Location = New-Object System.Drawing.Point(600, 56)
 $gameBottom.Controls.Add($gameRestorePoint)
 
 $gameStatus = New-Object System.Windows.Forms.Label
 $gameStatus.Text = ''
-$gameStatus.Location = New-Object System.Drawing.Point(690, 34)
+$gameStatus.Location = New-Object System.Drawing.Point(16, 88)
 $gameStatus.AutoSize = $true
 $gameStatus.ForeColor = [System.Drawing.Color]::FromArgb(120, 120, 130)
 $gameBottom.Controls.Add($gameStatus)
@@ -2034,8 +2096,8 @@ function Update-GameStatuses {
         if (-not $s) { continue }
         if ($s.Status -notin 'myth', 'unsupported', 'notfit') { $applicable++ }
         switch ($s.Status) {
-            'applied' { $item.SubItems[3].Text = 'включено'; $item.ForeColor = [System.Drawing.Color]::FromArgb(30, 120, 50); $applied++ }
-            'partial' { $item.SubItems[3].Text = 'частично'; $item.ForeColor = [System.Drawing.Color]::FromArgb(150, 110, 20) }
+            'applied' { $item.SubItems[3].Text = 'включено'; $item.ForeColor = $script:Theme.Text; $applied++ }
+            'partial' { $item.SubItems[3].Text = 'частично'; $item.ForeColor = $script:Theme.Text }
             'myth' { $item.SubItems[3].Text = 'не применяется'; $item.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 150) }
             'unsupported' { $item.SubItems[3].Text = 'не для этой Windows'; $item.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 150) }
             'notfit' { $item.SubItems[3].Text = 'не подходит'; $item.ForeColor = [System.Drawing.Color]::FromArgb(140, 140, 150); $item.Checked = $false }
@@ -2047,8 +2109,100 @@ function Update-GameStatuses {
         $item.ToolTipText = ("{0}`r`nСейчас: {1}. {2}" -f $item.Tag.what, $item.SubItems[3].Text, $(if ($s.Detail) { '(' + $s.Detail + ')' } else { '' }))
     }
     $script:GameStatusBase = ('включено: {0} из {1}' -f $applied, $applicable)
+    # счётчик на главной: сколько из подобранного под этот ПК уже включено
+    $recOn = 0; $recAll = 0
+    foreach ($item in $script:GameItems) {
+        if (-not (Test-ActionRecommended $item.Tag)) { continue }
+        $t = [string]$item.SubItems[3].Text
+        if ($t -notin 'включено', 'частично', 'выключено') { continue }
+        $recAll++
+        if ($t -eq 'включено') { $recOn++ }
+    }
+    $script:Score = [pscustomobject]@{ On = $recOn; All = $recAll; Total = $applied }
+    if ($homeScore) { $homeScore.Visible = $true; $homeScore.Invalidate() }
     $gameStatus.Text = $script:GameStatusBase
     Update-GameFilter
+}
+
+# ---------- переключатели вкл/выкл в списке настроек ----------
+$script:SwitchCol = 3
+
+function Get-GameSwitchRect {
+    param([System.Drawing.Rectangle]$Cell)
+    $w = 40; $h = 20
+    return New-Object System.Drawing.Rectangle(($Cell.X + 10), ($Cell.Y + [int](($Cell.Height - $h) / 2)), $w, $h)
+}
+
+function Invoke-GameToggle {
+    param($Item)
+    if (-not $Item -or -not $Item.Tag) { return }
+    $a = $Item.Tag
+    $state = [string]$Item.SubItems[3].Text
+    if ($state -notin 'включено', 'частично', 'выключено') {
+        $why = if ($a.myth) { 'Это миф: настройка не даёт прироста, поэтому pckit её не включает.' } else { ('Недоступно: {0}. {1}' -f $state, (Get-ActionReason $a)) }
+        [void][System.Windows.Forms.MessageBox]::Show($why, 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+        return
+    }
+    $id = [string]$a.id
+    $gameList.Enabled = $false
+    try {
+        if ($state -eq 'включено') {
+            $gameStatus.Text = ('выключаю: {0}...' -f $a.title); [System.Windows.Forms.Application]::DoEvents()
+            $body = {
+                param($root, $id)
+                . (Join-Path $root 'engine\Common.ps1')
+                . (Join-Path $root 'engine\Journal.ps1')
+                . (Join-Path $root 'engine\Actions.ps1')
+                return (Restore-PckitJournal -Journal (Read-PckitJournal) -Run -ActionId $id)
+            }
+            $r = (Invoke-Remote -Body $body -Arguments @($script:Root, $id))[0]
+            if (-not @($r.Items).Count) {
+                [void][System.Windows.Forms.MessageBox]::Show(
+                    ("pckit не находит, что сам включал «{0}»: так было в Windows ещё до него или настройка включена вместе с другими в старой версии.`r`n`r`nВернуть всё разом — кнопка «Вернуть всё как было»." -f $a.title),
+                    'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+            } elseif ($r.Failed) {
+                $bad = @($r.Items | Where-Object { $_.Status -eq 'fail' } | ForEach-Object { '  • {0}: {1}' -f $_.Title, $_.Message }) -join "`r`n"
+                [void][System.Windows.Forms.MessageBox]::Show(("Вернулось не всё:`r`n" + $bad), 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            }
+        } else {
+            if ($a.danger -or $a.expert) {
+                $icon = if ($a.danger) { [System.Windows.Forms.MessageBoxIcon]::Stop } else { [System.Windows.Forms.MessageBoxIcon]::Warning }
+                $head = if ($a.danger) { 'НА СВОЙ СТРАХ И РИСК.' } else { 'Экспертная настройка.' }
+                $ans = [System.Windows.Forms.MessageBox]::Show(("{0}`r`n`r`n{1}`r`n{2}`r`n`r`nВключить? Выключить можно тем же переключателем." -f $head, $a.title, $a.effect),
+                    'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::YesNo, $icon, [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
+                if ($ans -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+            }
+            Invoke-EnsureBeforeSnapshot -SetText { param($t) $gameStatus.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
+            if ($gameRestorePoint.Checked -and -not $script:SessionRestorePoint) {
+                $gameStatus.Text = 'создаю точку восстановления (один раз за запуск)...'; [System.Windows.Forms.Application]::DoEvents()
+                try {
+                    $rpBody = { param($root) . (Join-Path $root 'engine\Common.ps1'); . (Join-Path $root 'engine\RestorePoint.ps1'); return (New-PckitRestorePoint -Run) }
+                    $script:LastRestorePoint = (Invoke-Remote -Body $rpBody -Arguments @($script:Root))[0]
+                } catch { }
+                $script:SessionRestorePoint = $true
+            }
+            $gameStatus.Text = ('включаю: {0}...' -f $a.title); [System.Windows.Forms.Application]::DoEvents()
+            $body = {
+                param($root, $id)
+                . (Join-Path $root 'engine\Common.ps1')
+                . (Join-Path $root 'engine\Journal.ps1')
+                . (Join-Path $root 'engine\Actions.ps1')
+                $sel = @(Get-PckitActions -Directory (Join-Path $root 'data') | Where-Object { $_.id -eq $id })
+                return (Invoke-PckitActions -Actions $sel -Run)
+            }
+            $res = (Invoke-Remote -Body $body -Arguments @($script:Root, $id))[0]
+            if ($res.Failed) {
+                [void][System.Windows.Forms.MessageBox]::Show(('Включилось не полностью.' + (Get-ApplyFailText $res)), 'pckit by odilbek',
+                    [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            }
+        }
+    } catch {
+        [void][System.Windows.Forms.MessageBox]::Show(('Ошибка: ' + $_.Exception.Message), 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+    } finally {
+        $gameList.Enabled = $true
+        Update-GameStatuses
+        try { Fill-DoneList } catch { }
+    }
 }
 
 # фильтр + поиск: перестраиваем видимый список из общего, галки и группы сохраняются
@@ -3620,7 +3774,7 @@ $cleanRunButton.Add_Click({
         $totalMb = 0.0
         $hasDism = $false
         foreach ($item in $cleanList.Items) {
-            if (-not $item.Checked) { continue }
+            if (-not ((Test-ActionRecommended $item.Tag) -and [string]$item.SubItems[3].Text -in 'выключено', 'частично')) { continue }
             if ($item.Tag.Kind -eq 'info') { continue }   # удаляется через Параметры Windows
             if ($item.Tag.Kind -eq 'dism') { $hasDism = $true }
             $ids += [string]$item.Tag.Id
@@ -3929,6 +4083,65 @@ $gameList.Add_ItemCheck({
 
 $gameCheckButton.Add_Click({ Update-GameStatuses })
 
+# рисуем список сами только ради колонки-переключателя, остальное — как обычно
+$gameList.Add_DrawColumnHeader({ param($s, $e) $e.DrawDefault = $true })
+$gameList.Add_DrawItem({ param($s, $e) })
+$gameList.Add_DrawSubItem({
+        param($s, $e)
+        $g = $e.Graphics
+        $sel = $e.Item.Selected
+        # выделение — мягкое голубое на всю строку, как в Проводнике Windows 11
+        $bg = if ($sel) { [System.Drawing.Color]::FromArgb(204, 228, 247) } else { $s.BackColor }
+        $b = New-Object System.Drawing.SolidBrush($bg); $g.FillRectangle($b, $e.Bounds); $b.Dispose()
+        $text = [string]$e.SubItem.Text
+        if ($e.ColumnIndex -ne $script:SwitchCol) {
+            $pad = if ($e.ColumnIndex -eq 0) { 4 } else { 6 }
+            $tr = New-Object System.Drawing.Rectangle(($e.Bounds.X + $pad), $e.Bounds.Y, ($e.Bounds.Width - $pad - 2), $e.Bounds.Height)
+            $col = if ($e.ColumnIndex -eq 0) { $e.Item.ForeColor } else { $script:Theme.Muted }
+            [System.Windows.Forms.TextRenderer]::DrawText($g, $text, $s.Font, $tr, $col, [System.Windows.Forms.TextFormatFlags]'VerticalCenter, Left, EndEllipsis, NoPrefix')
+            return
+        }
+        $sel = $false   # текст переключателя — обычным цветом и на выделенной строке
+        $fg = $script:Theme.Muted
+        if ($text -in 'включено', 'частично', 'выключено') {
+            $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+            $r = Get-GameSwitchRect -Cell $e.Bounds
+            $path = New-PckitRoundPath -Rect $r -Radius ([int]($r.Height / 2))
+            $on = $text -ne 'выключено'
+            if ($on) {
+                $fill = if ($text -eq 'частично') { [System.Drawing.Color]::FromArgb(202, 138, 4) } else { $script:Theme.Accent }
+                $fb = New-Object System.Drawing.SolidBrush($fill); $g.FillPath($fb, $path); $fb.Dispose()
+                $kx = $r.Right - 16
+                $kb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+            } else {
+                $wb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White); $g.FillPath($wb, $path); $wb.Dispose()
+                $pen = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(110, 110, 110), 1); $g.DrawPath($pen, $path); $pen.Dispose()
+                $kx = $r.X + 4
+                $kb = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::FromArgb(90, 90, 90))
+            }
+            $g.FillEllipse($kb, $kx, ($r.Y + 4), 12, 12); $kb.Dispose(); $path.Dispose()
+            $label = switch ($text) { 'включено' { 'Вкл' } 'частично' { 'Частично' } default { 'Выкл' } }
+            $tr = New-Object System.Drawing.Rectangle(($r.Right + 8), $e.Bounds.Y, ($e.Bounds.Right - $r.Right - 8), $e.Bounds.Height)
+            [System.Windows.Forms.TextRenderer]::DrawText($g, $label, $s.Font, $tr, $(if ($sel) { $fg } else { $script:Theme.Text }), [System.Windows.Forms.TextFormatFlags]'VerticalCenter, Left, EndEllipsis')
+        } else {
+            $tr = New-Object System.Drawing.Rectangle(($e.Bounds.X + 10), $e.Bounds.Y, ($e.Bounds.Width - 10), $e.Bounds.Height)
+            [System.Windows.Forms.TextRenderer]::DrawText($g, $text, $s.Font, $tr, $fg, [System.Windows.Forms.TextFormatFlags]'VerticalCenter, Left, EndEllipsis')
+        }
+    })
+# клик по переключателю — включить/выключить; пробел — то же для выбранной строки
+$gameList.Add_MouseClick({
+        param($s, $e)
+        if ($e.Button -ne [System.Windows.Forms.MouseButtons]::Left) { return }
+        $hit = $s.HitTest($e.Location)
+        if (-not $hit.Item -or -not $hit.SubItem) { return }
+        if ($hit.Item.SubItems.IndexOf($hit.SubItem) -ne $script:SwitchCol) { return }
+        Invoke-GameToggle -Item $hit.Item
+    })
+$gameList.Add_KeyDown({
+        param($s, $e)
+        if ($e.KeyCode -eq 'Space' -and $s.SelectedItems.Count) { $e.Handled = $true; $e.SuppressKeyPress = $true; Invoke-GameToggle -Item $s.SelectedItems[0] }
+    })
+
 $gamePresetButton.Add_Click({
         foreach ($item in $script:GameItems) {
             $item.Checked = (Test-ActionRecommended $item.Tag)
@@ -3941,13 +4154,13 @@ $gameApplyButton.Add_Click({
         $expertTitles = @()
         $dangerTitles = @()
         foreach ($item in $script:GameItems) {
-            if (-not $item.Checked) { continue }
+            if (-not ((Test-ActionRecommended $item.Tag) -and [string]$item.SubItems[3].Text -in 'выключено', 'частично')) { continue }
             $ids += [string]$item.Tag.id
             if ($item.Tag.danger) { $dangerTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
             elseif ($item.Tag.expert) { $expertTitles += ('  • ' + [string]$item.Tag.title + ' — ' + [string]$item.Tag.effect) }
         }
         if (-not $ids.Count) {
-            [void][System.Windows.Forms.MessageBox]::Show('Отметьте хотя бы одно действие.', 'pckit by odilbek',
+            [void][System.Windows.Forms.MessageBox]::Show('Всё подобранное под ваш ПК уже включено.', 'pckit by odilbek',
                 [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
             return
         }
@@ -3956,7 +4169,7 @@ $gameApplyButton.Add_Click({
         if ($run -and $expertTitles.Count) {
             $warn = [System.Windows.Forms.MessageBox]::Show(
                 ("Отмечены экспертные настройки — они отключают службы и задачи Windows:`r`n`r`n" + ($expertTitles -join "`r`n") +
-                    "`r`n`r`nРеальный выигрыш небольшой, а часть функций Windows перестанет работать. Всё отменяется кнопкой «Отменить изменения». Продолжить?"),
+                    "`r`n`r`nРеальный выигрыш небольшой, а часть функций Windows перестанет работать. Всё отменяется кнопкой «Вернуть всё как было». Продолжить?"),
                 'pckit by odilbek — эксперт', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning,
                 [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
             if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
@@ -3964,14 +4177,14 @@ $gameApplyButton.Add_Click({
         if ($run -and $dangerTitles.Count) {
             $warn = [System.Windows.Forms.MessageBox]::Show(
                 ("НА СВОЙ СТРАХ И РИСК. Эти настройки не проверены как полезные и могут сломать часть Windows:`r`n`r`n" + ($dangerTitles -join "`r`n") +
-                    "`r`n`r`nПрирост не гарантирован, на части ПК будет хуже. Применяйте по одной, проверяйте FPS и стабильность, при проблемах — «Отменить изменения». Точно продолжить?"),
+                    "`r`n`r`nПрирост не гарантирован, на части ПК будет хуже. Применяйте по одной, проверяйте FPS и стабильность, при проблемах — «Вернуть всё как было». Точно продолжить?"),
                 'pckit by odilbek — на свой риск', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Stop,
                 [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
             if ($warn -ne [System.Windows.Forms.DialogResult]::Yes) { return }
         }
         if ($run) {
             $answer = [System.Windows.Forms.MessageBox]::Show(
-                ('Применить настроек: {0}? Каждое изменение записывается в журнал, откат — кнопкой «Отменить изменения».' -f $ids.Count),
+                ('Включить подобранное под ваш ПК: {0} шт.? Любую можно выключить переключателем, всё сразу — «Вернуть всё как было».' -f $ids.Count),
                 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
             if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
             Invoke-EnsureBeforeSnapshot -SetText { param($t) $gameStatus.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
@@ -4656,17 +4869,21 @@ Set-ListFill -List $doneList -FillIndex 2 -Widths @(130, 420, 0)
 Set-ListFill -List $startupList -FillIndex 0 -Widths @(0, 190, 90, 140, 240)
 
 # «Настройки»: флажки справа прижимаются к краю, описание занимает остаток (до трёх строк, кнопки ниже)
-$gameLayout.RowStyles[2].Height = 120
+$gameLayout.RowStyles[2].Height = 132
 $gameDetails.Height = 56
 $gameDetails.AutoEllipsis = $true
 foreach ($b in @($gameApplyButton, $gameCheckButton, $gamePresetButton, $gameUndoButton)) { $b.Top = 70 }
+$gameUndoButton.Width = 190
+# описание — на всю ширину сверху; снизу кнопки слева, счётчик и точка восстановления справа
 $gameBottom.Add_Resize({
         $w = $gameBottom.ClientSize.Width
-        $gameRestorePoint.Left = $w - $gameRestorePoint.Width - 14
-        $gameDryRun.Left = $gameRestorePoint.Left - $gameDryRun.Width - 18
-        $gameStatus.Left = $gameDryRun.Left
-        $gameDetails.Width = [Math]::Max(200, $gameDryRun.Left - 28)
+        $gameDetails.Width = [Math]::Max(200, $w - 28)
+        $gameRestorePoint.Left = 16
+        $gameRestorePoint.Top = 108
+        $gameStatus.Left = $w - $gameStatus.Width - 14
+        $gameStatus.Top = 110
     })
+$gameStatus.Add_TextChanged({ $gameStatus.Left = $gameBottom.ClientSize.Width - $gameStatus.Width - 14 })
 
 # «Сохранить»: поиск и набор выстраиваются справа налево и не наезжают друг на друга
 $header.Add_Resize({
