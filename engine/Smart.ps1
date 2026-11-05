@@ -216,8 +216,20 @@ function Get-PckitSmartFindings {
                         -Detail 'Reflex снижает задержку ввода на видеокартах NVIDIA, особенно когда карта загружена на 100%.' `
                         -Hint 'CS2 → Настройки → Видео → Дополнительно → NVIDIA Reflex Low Latency: «Вкл.».'))
         }
-        # fps_max: ровные кадры важнее рекорда среднего. Ищем ограничение в autoexec (своё или чужое)
+        # fps_max: ровные кадры важнее рекорда среднего. Ищем ограничение там, где игра его хранит
+        # (настройки игрока, ставятся из консоли или меню) и в autoexec — он выполняется позже и главнее
         $cap = $null
+        try {
+            if ($v.File) {
+                # fps_max игра хранит в machine_convars (на этот ПК), в старых версиях — в user_convars
+                foreach ($n in 'cs2_user_convars_0_slot0.vcfg', 'cs2_machine_convars.vcfg') {
+                    $uc = Join-Path (Split-Path -Parent $v.File) $n
+                    if (-not (Test-Path -LiteralPath $uc)) { continue }
+                    $m = [regex]::Match([IO.File]::ReadAllText($uc), '"fps_max"\s+"(\d+)"')
+                    if ($m.Success) { $cap = [int]$m.Groups[1].Value }
+                }
+            }
+        } catch { }
         try {
             $cfgDir = Get-PckitCs2CfgDir
             $ae = if ($cfgDir) { Join-Path $cfgDir 'autoexec.cfg' } else { $null }

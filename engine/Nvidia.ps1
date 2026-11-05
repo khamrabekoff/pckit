@@ -275,6 +275,7 @@ function Add-PckitNvTracked {
     # одну настройку записываем один раз: при повторном применении первое «до» не теряем
     foreach ($e in @($Journal.nvidia)) {
         if ($script:PckitBatchSince -and $e -and [string]$e.at -lt $script:PckitBatchSince) { continue }
+        if ($script:PckitCurrentAct -and $e -and [string]$e.act -and [string]$e.act -ne $script:PckitCurrentAct) { continue }
         if ($e -and [string]$e.exe -eq $Exe -and [uint32]$e.id -eq $Id) { return }
     }
     $restore = 'default'

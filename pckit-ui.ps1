@@ -1040,9 +1040,9 @@ $gameList.BorderStyle = 'FixedSingle'
 $gameList.Font = New-Object System.Drawing.Font('Segoe UI', 9)
 $gameList.BackColor = [System.Drawing.Color]::White
 [void]$gameList.Columns.Add('Настройка', 340)
-[void]$gameList.Columns.Add('Для вашего ПК', 330)
+[void]$gameList.Columns.Add('Для вашего ПК', 300)
 [void]$gameList.Columns.Add('Эффект', 80)
-[void]$gameList.Columns.Add('Вкл / выкл', 150)
+[void]$gameList.Columns.Add('Вкл / выкл', 180)
 [void]$gameList.Columns.Add('Раздел', 120)
 
 $gameBottom = New-Object System.Windows.Forms.Panel
@@ -1075,28 +1075,12 @@ $gameCheckButton.Size = New-Object System.Drawing.Size(110, 32)
 $gameCheckButton.FlatStyle = 'System'
 $gameBottom.Controls.Add($gameCheckButton)
 
-$gamePresetButton = New-Object System.Windows.Forms.Button
-$gamePresetButton.Text = 'Подобрать под мой ПК'
-$gamePresetButton.Location = New-Object System.Drawing.Point(344, 50)
-$gamePresetButton.Size = New-Object System.Drawing.Size(210, 32)
-$gamePresetButton.FlatStyle = 'System'
-$gamePresetButton.Visible = $false   # отметок больше нет: переключатели и кнопка «Включить всё подобранное»
-$gameBottom.Controls.Add($gamePresetButton)
-
 $gameUndoButton = New-Object System.Windows.Forms.Button
 $gameUndoButton.Text = 'Вернуть всё как было'
 $gameUndoButton.Location = New-Object System.Drawing.Point(374, 50)
 $gameUndoButton.Size = New-Object System.Drawing.Size(180, 32)
 $gameUndoButton.FlatStyle = 'System'
 $gameBottom.Controls.Add($gameUndoButton)
-
-$gameDryRun = New-Object System.Windows.Forms.CheckBox
-$gameDryRun.Text = 'только показать'
-$gameDryRun.Checked = $false
-$gameDryRun.Visible = $false
-$gameDryRun.AutoSize = $true
-$gameDryRun.Location = New-Object System.Drawing.Point(680, 8)
-$gameBottom.Controls.Add($gameDryRun)
 
 $gameRestorePoint = New-Object System.Windows.Forms.CheckBox
 $gameRestorePoint.Text = 'точка восстановления перед первым изменением'
@@ -2040,9 +2024,14 @@ function Get-UiHardware {
 
 # «рекомендуемые» — подобраны под этот ПК: высокий/средний эффект, без экспертных и мифов,
 # с учётом железа (requires / skipIf / boostIf в actions.json)
+$script:RecCache = @{}   # железо за запуск не меняется — подбор считаем один раз на настройку
 function Test-ActionRecommended {
     param($Action)
-    return [bool](Get-PckitSmartAdvice -Action $Action -Hw (Get-UiHardware)).Recommended
+    $id = [string]$Action.id
+    if (-not $script:RecCache.ContainsKey($id)) {
+        $script:RecCache[$id] = [bool](Get-PckitSmartAdvice -Action $Action -Hw (Get-UiHardware)).Recommended
+    }
+    return $script:RecCache[$id]
 }
 
 function Get-ActionReason {
@@ -2087,6 +2076,9 @@ $script:GameItems = New-Object System.Collections.ArrayList   # все стро�
 function Update-GameStatuses {
     if (-not $script:Actions.Count) { return }
     $state = Get-PckitActionsState -Actions $script:Actions -SkipProgress
+    # какие настройки pckit включал сам (по меткам в журнале) — только их можно выключить по одной
+    $script:JournalActs = @{}
+    try { $jr = Read-PckitJournal; foreach ($k in $script:PckitJournalKinds) { foreach ($je in @($jr.$k)) { if ($je -and [string]$je.act) { $script:JournalActs[[string]$je.act] = $true } } } } catch { }
     $byId = @{}
     foreach ($s in $state) { $byId[[string]$s.Action.id] = $s }
     $applied = 0
@@ -2157,9 +2149,10 @@ function Invoke-GameToggle {
             }
             $r = (Invoke-Remote -Body $body -Arguments @($script:Root, $id))[0]
             if (-not @($r.Items).Count) {
-                [void][System.Windows.Forms.MessageBox]::Show(
-                    ("pckit не находит, что сам включал «{0}»: так было в Windows ещё до него или настройка включена вместе с другими в старой версии.`r`n`r`nВернуть всё разом — кнопка «Вернуть всё как было»." -f $a.title),
-                    'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+                $ans = [System.Windows.Forms.MessageBox]::Show(
+                    ("«{0}» включено, но не этим запуском pckit: так было в Windows изначально, или настройку включила старая версия pckit (до 2.6), которая не запоминала, что к какой настройке относится.`r`n`r`nПо одной такую настройку не выключить — только вместе со всеми изменениями pckit.`r`n`r`nОткрыть «История и отмена»?" -f $a.title),
+                    'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Information)
+                if ($ans -eq [System.Windows.Forms.DialogResult]::Yes) { $tabs.SelectedTab = $tabDone; Update-NavSelection }
             } elseif ($r.Failed) {
                 $bad = @($r.Items | Where-Object { $_.Status -eq 'fail' } | ForEach-Object { '  • {0}: {1}' -f $_.Title, $_.Message }) -join "`r`n"
                 [void][System.Windows.Forms.MessageBox]::Show(("Вернулось не всё:`r`n" + $bad), 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
@@ -2175,11 +2168,22 @@ function Invoke-GameToggle {
             Invoke-EnsureBeforeSnapshot -SetText { param($t) $gameStatus.Text = $t; [System.Windows.Forms.Application]::DoEvents() }
             if ($gameRestorePoint.Checked -and -not $script:SessionRestorePoint) {
                 $gameStatus.Text = 'создаю точку восстановления (один раз за запуск)...'; [System.Windows.Forms.Application]::DoEvents()
+                $rp = $null
                 try {
                     $rpBody = { param($root) . (Join-Path $root 'engine\Common.ps1'); . (Join-Path $root 'engine\RestorePoint.ps1'); return (New-PckitRestorePoint -Run) }
-                    $script:LastRestorePoint = (Invoke-Remote -Body $rpBody -Arguments @($script:Root))[0]
-                } catch { }
-                $script:SessionRestorePoint = $true
+                    $rp = (Invoke-Remote -Body $rpBody -Arguments @($script:Root))[0]
+                    $script:LastRestorePoint = $rp
+                } catch { $rp = [pscustomobject]@{ Status = 'failed'; Message = $_.Exception.Message } }
+                if (-not $rp -or $rp.Status -eq 'failed') {
+                    $why = if ($rp) { [string]$rp.Message } else { 'нет ответа' }
+                    $go = [System.Windows.Forms.MessageBox]::Show(
+                        ("Не удалось создать точку восстановления:`r`n{0}`r`n`r`nВключить настройку без неё? (Выключить её всё равно можно этим же переключателем.)" -f $why),
+                        'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+                    if ($go -ne [System.Windows.Forms.DialogResult]::Yes) { return }
+                    $script:SessionRestorePoint = $true   # согласились без неё — не спрашиваем на каждом переключателе
+                } else {
+                    $script:SessionRestorePoint = $true   # получилось — больше за этот запуск не создаём
+                }
             }
             $gameStatus.Text = ('включаю: {0}...' -f $a.title); [System.Windows.Forms.Application]::DoEvents()
             $body = {
@@ -4074,13 +4078,6 @@ $gameList.Add_SelectedIndexChanged({ Update-GameDetails })
 $gameFilter.Add_SelectedIndexChanged({ if ($script:GameItems.Count) { Update-GameFilter } })
 $gameSearch.Add_TextChanged({ if ($script:GameItems.Count) { Update-GameFilter } })
 
-# мифы и то, что не подходит этой Windows, отметить нельзя
-$gameList.Add_ItemCheck({
-        param($s, $e)
-        $a = $gameList.Items[$e.Index].Tag
-        if ($a -and ($a.myth -or -not (Test-ActionSupported $a) -or $gameList.Items[$e.Index].SubItems[3].Text -eq 'не подходит')) { $e.NewValue = [System.Windows.Forms.CheckState]::Unchecked }
-    })
-
 $gameCheckButton.Add_Click({ Update-GameStatuses })
 
 # рисуем список сами только ради колонки-переключателя, остальное — как обычно
@@ -4121,6 +4118,8 @@ $gameList.Add_DrawSubItem({
             }
             $g.FillEllipse($kb, $kx, ($r.Y + 4), 12, 12); $kb.Dispose(); $path.Dispose()
             $label = switch ($text) { 'включено' { 'Вкл' } 'частично' { 'Частично' } default { 'Выкл' } }
+            # включено не этим pckit (Windows или старая версия): выключается только через «Вернуть всё как было»
+            if ($on -and $script:JournalActs -and -not $script:JournalActs.ContainsKey([string]$e.Item.Tag.id)) { $label += ' (было до)' }
             $tr = New-Object System.Drawing.Rectangle(($r.Right + 8), $e.Bounds.Y, ($e.Bounds.Right - $r.Right - 8), $e.Bounds.Height)
             [System.Windows.Forms.TextRenderer]::DrawText($g, $label, $s.Font, $tr, $(if ($sel) { $fg } else { $script:Theme.Text }), [System.Windows.Forms.TextFormatFlags]'VerticalCenter, Left, EndEllipsis')
         } else {
@@ -4142,13 +4141,6 @@ $gameList.Add_KeyDown({
         if ($e.KeyCode -eq 'Space' -and $s.SelectedItems.Count) { $e.Handled = $true; $e.SuppressKeyPress = $true; Invoke-GameToggle -Item $s.SelectedItems[0] }
     })
 
-$gamePresetButton.Add_Click({
-        foreach ($item in $script:GameItems) {
-            $item.Checked = (Test-ActionRecommended $item.Tag)
-        }
-        $gameStatus.Text = 'отмечено то, что подходит вашему ПК (★)'
-    })
-
 $gameApplyButton.Add_Click({
         $ids = @()
         $expertTitles = @()
@@ -4165,7 +4157,7 @@ $gameApplyButton.Add_Click({
             return
         }
 
-        $run = -not $gameDryRun.Checked
+        $run = $true   # пробного прогона в окне больше нет
         if ($run -and $expertTitles.Count) {
             $warn = [System.Windows.Forms.MessageBox]::Show(
                 ("Отмечены экспертные настройки — они отключают службы и задачи Windows:`r`n`r`n" + ($expertTitles -join "`r`n") +
@@ -4202,6 +4194,7 @@ $gameApplyButton.Add_Click({
                 }
                 $rp = (Invoke-Remote -Body $rpBody -Arguments @($script:Root))[0]
                 $script:LastRestorePoint = $rp
+                if ($rp.Status -ne 'failed') { $script:SessionRestorePoint = $true }
                 if ($rp.Status -eq 'failed') {
                     $continue = [System.Windows.Forms.MessageBox]::Show(
                         ("Не удалось создать точку восстановления:`r`n{0}`r`n`r`nПродолжить без неё?" -f $rp.Message),
@@ -4721,9 +4714,7 @@ $script:Tip.ReshowDelay = 200
 $tipMap = @(
     @($gameApplyButton, 'Применить отмеченные настройки. Перед этим — замер «до» и точка восстановления. Всё записывается в журнал.'),
     @($gameCheckButton, 'Перечитать, что сейчас включено на этом ПК (ничего не меняет).'),
-    @($gamePresetButton, 'Отметить ★ — то, что подходит именно вашему железу. Снимет остальные галки.'),
     @($gameUndoButton, 'Вернуть всё, что программа меняла, как было до неё.'),
-    @($gameDryRun, 'Ничего не менять — только показать, что было бы сделано.'),
     @($gameRestorePoint, 'Перед изменениями создать точку восстановления Windows (запасной откат).'),
     @($gameFilter, 'Какие настройки показывать в списке.'),
     @($gameSearch, 'Найти настройку по словам: «мышь», «NVIDIA», «питание»…'),
@@ -4861,7 +4852,7 @@ function Set-ListFill {
     $List.Add_Resize({ param($s, $e) Update-ListFill $s })
     Update-ListFill $List
 }
-Set-ListFill -List $gameList -FillIndex 1 -Widths @(310, 0, 72, 128, 112)
+Set-ListFill -List $gameList -FillIndex 1 -Widths @(310, 0, 72, 168, 104)
 Set-ListFill -List $cleanList -FillIndex 1 -Widths @(250, 0, 90, 70)
 Set-ListFill -List $healthList -FillIndex 2 -Widths @(100, 340, 0)
 Set-ListFill -List $resultList -FillIndex 5 -Widths @(200, 120, 120, 80, 135, 0)
@@ -4872,7 +4863,7 @@ Set-ListFill -List $startupList -FillIndex 0 -Widths @(0, 190, 90, 140, 240)
 $gameLayout.RowStyles[2].Height = 132
 $gameDetails.Height = 56
 $gameDetails.AutoEllipsis = $true
-foreach ($b in @($gameApplyButton, $gameCheckButton, $gamePresetButton, $gameUndoButton)) { $b.Top = 70 }
+foreach ($b in @($gameApplyButton, $gameCheckButton, $gameUndoButton)) { $b.Top = 70 }
 $gameUndoButton.Width = 190
 # описание — на всю ширину сверху; снизу кнопки слева, счётчик и точка восстановления справа
 $gameBottom.Add_Resize({
