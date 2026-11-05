@@ -41,13 +41,42 @@ function Get-PckitPlanStep {
     }
 }
 
+# Файл профиля может быть чужим: куда писать, берём не из него, а из своих рецептов и известных папок.
+# Рецепт -> разрешённые цели шагов (path для dir/file, key для registry), как они записаны в recipes\*.json
+function Get-PckitRecipeTargets {
+    param([string]$RecipeDir)
+    if (-not $RecipeDir) { $RecipeDir = Join-Path (Split-Path -Parent $script:PckitEngineDir) 'recipes' }
+    $map = @{}
+    foreach ($r in @(Get-PckitRecipes -Directory $RecipeDir)) {
+        $set = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
+        foreach ($st in @($r.Steps)) {
+            if ([string]$st.type -in 'dir', 'file' -and $st.path) { [void]$set.Add(([string]$st.path).TrimEnd('\')) }
+            if ([string]$st.type -eq 'registry' -and $st.key) { [void]$set.Add((ConvertTo-PckitRegHiveName ([string]$st.key))) }
+            if ([string]$st.type -eq 'command' -and $st.restoreTemplate) { [void]$set.Add([string]$st.restoreTemplate) }
+        }
+        $map[[string]$r.Id] = $set
+    }
+    return $map
+}
+
+function Test-PckitRecipeTarget {
+    param($Targets, [string]$RecipeId, [string]$Type, [string]$Target)
+    if (-not $RecipeId -or -not $Targets.ContainsKey($RecipeId)) { return $false }
+    $t = if ($Type -eq 'registry') { ConvertTo-PckitRegHiveName $Target } else { $Target.TrimEnd('\') }
+    return $Targets[$RecipeId].Contains($t)
+}
+
 function Get-PckitPlan {
     param(
         [Parameter(Mandatory)]$Manifest,
-        $CurrentIndex = $null
+        $CurrentIndex = $null,
+        [string]$RecipeDir
     )
 
     if (-not $CurrentIndex) { $CurrentIndex = Get-PckitCurrentAppIndex }
+    $recipeTargets = Get-PckitRecipeTargets -RecipeDir $RecipeDir
+    $fileDefs = @{}
+    foreach ($d in @(Get-PckitFileDefs)) { $fileDefs[[string]$d.Id] = $d }
 
     $steps = New-Object System.Collections.Generic.List[object]
     # apps listed in manifest.manual are reported once at the end, not twice
@@ -73,6 +102,12 @@ function Get-PckitPlan {
             }
             'appdata' {
                 foreach ($step in @($item.meta.steps)) {
+                    if ($step.payload -and ([string]$step.type -in 'dir', 'file', 'registry' -or ([string]$step.type -eq 'command' -and $step.target)) -and
+                        -not (Test-PckitRecipeTarget -Targets $recipeTargets -RecipeId ([string]$item.meta.recipe) -Type ([string]$step.type) -Target ([string]$step.target))) {
+                        $steps.Add((Get-PckitPlanStep -Action 'note' -ItemId $item.id -Title $item.title -Risk 'high' `
+                                    -Detail ('отклонено: «{0}» не совпадает с рецептом pckit — так бывает у чужого или изменённого профиля' -f $step.target)))
+                        continue
+                    }
                     if (-not $step.payload) {
                         $steps.Add((Get-PckitPlanStep -Action 'note' -ItemId $item.id -Title $item.title -Risk $item.risk `
                                     -Detail ('шаг {0}: не захвачен' -f $step.type)))
@@ -116,7 +151,13 @@ function Get-PckitPlan {
                 }
             }
             'files' {
-                $target = Resolve-PckitPath ([string]$item.meta.target)
+                $def = $fileDefs[[string]$item.id]
+                if (-not $def -or [string]$def.Path -ine [string]$item.meta.target) {
+                    $steps.Add((Get-PckitPlanStep -Action 'note' -ItemId $item.id -Title $item.title -Risk 'high' `
+                                -Detail ('отклонено: неизвестная папка «{0}» — так бывает у чужого или изменённого профиля' -f $item.meta.target)))
+                    continue
+                }
+                $target = Resolve-PckitPath ([string]$def.Path)
                 if ([string]$item.meta.mode -eq 'reference' -or -not $item.payload) {
                     $steps.Add((Get-PckitPlanStep -Action 'checkexists' -ItemId $item.id -Title $item.title -Risk $item.risk `
                                 -Detail ('проверить наличие: ' + $target) -Meta ([pscustomobject]@{ Target = $target })))
@@ -162,8 +203,8 @@ function Get-PckitPlan {
             }
             'dev' {
                 $type = [string]$item.meta.type
-                if ($type -eq 'file' -and $item.payload) {
-                    $target = if ($item.id -eq 'dev.gitconfig') { Join-Path $env:USERPROFILE '.gitconfig' } else { Join-Path $env:USERPROFILE (Split-Path -Leaf $item.payload) }
+                if ($type -eq 'file' -and $item.payload -and $item.id -eq 'dev.gitconfig') {
+                    $target = Join-Path $env:USERPROFILE '.gitconfig'
                     $steps.Add((Get-PckitPlanStep -Action 'copyfile' -ItemId $item.id -Title $item.title -Risk $item.risk `
                                 -Detail ('{0} -> {1}' -f $item.payload, $target) -Meta ([pscustomobject]@{ Payload = $item.payload; Target = $target })))
                 }
@@ -191,6 +232,7 @@ function Get-PckitPlan {
     }
 
     foreach ($m in @($Manifest.manual)) {
+        if (-not $m) { continue }
         $steps.Add((Get-PckitPlanStep -Action 'manual' -ItemId ('manual:' + $m.title) -Title $m.title -Risk 'medium' `
                     -Detail ([string]$m.reason) -Meta $m))
     }

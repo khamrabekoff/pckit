@@ -1,7 +1,8 @@
 ﻿#Requires -Version 5.1
 # pckit engine | common helpers (dot-sourced by pckit.ps1)
 
-$script:PckitVersion = '0.2.0'
+# единая версия программы: окно, CLI, профили .pckit и сборка берут её отсюда
+$script:PckitVersion = '2.3.0'
 $script:PckitEngineDir = $PSScriptRoot
 
 function Write-PckitLog {
@@ -66,13 +67,77 @@ function Test-PckitSafePath {
     return [pscustomobject]@{ Safe = $true; Reason = '' }
 }
 
+# папки пользователя, которые умеет сохранять pckit (Catalog и проверка чужого профиля в Planner)
+function Get-PckitFileDefs {
+    return @(
+        @{ Id = 'files.desktop'; Title = 'Рабочий стол'; Path = '%USERPROFILE%\Desktop'; Mode = 'copy'; Default = $true; Risk = 'low' }
+        @{ Id = 'files.documents'; Title = 'Документы'; Path = '%USERPROFILE%\Documents'; Mode = 'copy'; Default = $true; Risk = 'low' }
+        @{ Id = 'files.pictures'; Title = 'Изображения'; Path = '%USERPROFILE%\Pictures'; Mode = 'copy'; Default = $false; Risk = 'low' }
+        @{ Id = 'files.downloads'; Title = 'Загрузки'; Path = '%USERPROFILE%\Downloads'; Mode = 'copy'; Default = $false; Risk = 'low' }
+        @{ Id = 'files.videos'; Title = 'Видео'; Path = '%USERPROFILE%\Videos'; Mode = 'reference'; Default = $false; Risk = 'low' }
+        @{ Id = 'files.music'; Title = 'Музыка'; Path = '%USERPROFILE%\Music'; Mode = 'reference'; Default = $false; Risk = 'low' }
+        @{ Id = 'files.savedgames'; Title = 'Сохранения игр'; Path = '%USERPROFILE%\Saved Games'; Mode = 'copy'; Default = $false; Risk = 'low' }
+        @{ Id = 'files.ssh'; Title = 'SSH-ключи (.ssh)'; Path = '%USERPROFILE%\.ssh'; Mode = 'copy'; Default = $false; Risk = 'high' }
+        @{ Id = 'files.gpg'; Title = 'GPG-ключи'; Path = '%APPDATA%\gnupg'; Mode = 'copy'; Default = $false; Risk = 'high' }
+    )
+}
+
+# куда восстановление может писать файлы: только внутри профиля пользователя и не в «Автозагрузку»
+# (программа работает от администратора, а файл профиля может быть чужим)
+function Test-PckitRestoreTarget {
+    param([string]$Path)
+    $p = Resolve-PckitPath $Path
+    if (-not $p) { return [pscustomobject]@{ Safe = $false; Reason = 'пустой путь' } }
+    if (-not (Test-PckitUnderRoot -Path $p -Root $env:USERPROFILE)) {
+        return [pscustomobject]@{ Safe = $false; Reason = 'вне папки пользователя' }
+    }
+    foreach ($sf in @([Environment]::GetFolderPath('Startup'), (Join-Path $env:APPDATA 'Microsoft\Windows\Start Menu\Programs\Startup'))) {
+        if ($sf -and (($p.TrimEnd('\') -ieq $sf.TrimEnd('\')) -or (Test-PckitUnderRoot -Path $p -Root $sf))) {
+            return [pscustomobject]@{ Safe = $false; Reason = 'папка «Автозагрузка»' }
+        }
+    }
+    return (Test-PckitSafePath -Path $p)
+}
+
+function ConvertTo-PckitRegHiveName {
+    param([string]$Key)
+    $k = $Key.Trim().TrimEnd('\')
+    $k = $k -replace '^(?i)HKCU(:)?\\', 'HKEY_CURRENT_USER\' -replace '^(?i)HKLM(:)?\\', 'HKEY_LOCAL_MACHINE\'
+    return $k
+}
+
+# .reg из профиля трогает только свою ветку (и только HKCU): иначе чужой файл мог бы записать что угодно в HKLM от администратора
+function Test-PckitRegFileScope {
+    param([string]$Path, [string]$Key)
+    $root = ConvertTo-PckitRegHiveName $Key
+    if ($root -notmatch '^(?i)HKEY_CURRENT_USER\\Software\\.+') {
+        return [pscustomobject]@{ Safe = $false; Reason = ('ветка не из HKCU\Software: {0}' -f $Key) }
+    }
+    $text = [IO.File]::ReadAllText($Path)
+    foreach ($m in [regex]::Matches($text, '(?m)^\s*\[(-?)([^\]\r\n]+)\]')) {
+        $sec = ConvertTo-PckitRegHiveName $m.Groups[2].Value
+        if (-not (($sec -ieq $root) -or $sec.StartsWith($root + '\', [StringComparison]::OrdinalIgnoreCase))) {
+            return [pscustomobject]@{ Safe = $false; Reason = ('в файле есть чужая ветка: {0}' -f $sec) }
+        }
+    }
+    return [pscustomobject]@{ Safe = $true; Reason = '' }
+}
+
+# переменные среды, через которые можно подсунуть код любой программе (или самой pckit) — из профиля не восстанавливаем
+$script:PckitEnvDeny = '^(?i)(PATH|PATHEXT|COMSPEC|PSMODULEPATH|WINDIR|SYSTEMROOT|SYSTEMDRIVE|TEMP|TMP|USERPROFILE|APPDATA|LOCALAPPDATA|PROGRAMDATA|PROGRAMFILES.*|COR_.*|CORECLR_.*|COMPLUS_.*|DOTNET_.*|NODE_OPTIONS|NODE_PATH|JAVA_TOOL_OPTIONS|_JAVA_OPTIONS|JDK_JAVA_OPTIONS|PYTHONSTARTUP|PYTHONPATH|PYTHONHOME|PERL5OPT|PERL5LIB|RUBYOPT|GIT_SSH|GIT_SSH_COMMAND|GIT_EXEC_PATH|GIT_ASKPASS|SSH_ASKPASS|__PSLOCKDOWNPOLICY)$'
+function Test-PckitEnvAllowed {
+    param([string]$Name)
+    return ($Name -match '^[A-Za-z_][A-Za-z0-9_]{0,100}$' -and $Name -notmatch $script:PckitEnvDeny)
+}
+
 function Test-PckitUnderRoot {
     # true, если Path лежит строго внутри Root (защита от ..\ и подмены путей из чужого профиля)
     param([string]$Path, [string]$Root)
     if (-not $Path -or -not $Root) { return $false }
     try {
-        $full = [IO.Path]::GetFullPath($Path).TrimEnd('\')
-        $base = [IO.Path]::GetFullPath($Root).TrimEnd('\') + '\'
+        $sep = [IO.Path]::DirectorySeparatorChar   # на Windows GetFullPath и так приводит / к \
+        $full = [IO.Path]::GetFullPath($Path).TrimEnd('\', '/')
+        $base = [IO.Path]::GetFullPath($Root).TrimEnd('\', '/') + $sep
     } catch { return $false }
     return $full.StartsWith($base, [StringComparison]::OrdinalIgnoreCase)
 }
@@ -118,6 +183,13 @@ function Test-PckitPathMatch {
     if (-not $Patterns) { return $false }
     $segments = $RelativePath -split '\\'
     foreach ($p in $Patterns) {
+        if (-not $p) { continue }
+        # шаблон с путём (user_data\cache) — от корня копируемой папки, вместе со всем содержимым
+        if ($p -match '\\') {
+            $pp = $p.Trim('\')
+            if ($RelativePath -ieq $pp -or $RelativePath.StartsWith($pp + '\', [StringComparison]::OrdinalIgnoreCase)) { return $true }
+            continue
+        }
         foreach ($s in $segments) {
             if ($p -match '[*?]') { if ($s -like $p) { return $true } }
             elseif ($s -ieq $p) { return $true }

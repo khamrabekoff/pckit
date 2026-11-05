@@ -12,18 +12,6 @@ function Get-PckitRestorePoints {
     return $points
 }
 
-function Test-PckitRestoreEnabled {
-    param([string]$Drive = $env:SystemDrive)
-
-    try {
-        $sessions = @(Get-CimInstance -Namespace 'root\default' -ClassName SystemRestore -ErrorAction Stop)
-        foreach ($s in $sessions) {
-            if ([string]$s.Description -match [regex]::Escape($Drive)) { return $true }
-        }
-    } catch { }
-    return $false
-}
-
 function New-PckitRestorePoint {
     param(
         [string]$Description = 'pckit by odilbek',
@@ -62,19 +50,42 @@ function New-PckitRestorePoint {
         }
     }
 
-    $enabled = Test-PckitRestoreEnabled
-    if (-not $enabled) {
-        try { Enable-ComputerRestore -Drive ($env:SystemDrive + '\') -ErrorAction Stop } catch { }
-    }
-
+    # Windows создаёт точку не чаще раза в сутки (SystemRestorePointCreationFrequency, по умолчанию 1440 минут):
+    # утренняя точка Windows Update иначе означала бы «изменения без свежей точки». Снимаем ограничение на время вызова.
+    $srKey = 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore'
+    $freqName = 'SystemRestorePointCreationFrequency'
+    $freqBefore = $null
+    $freqSet = $false
     try {
-        Checkpoint-Computer -Description $Description -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+        $item = Get-Item -LiteralPath $srKey -ErrorAction Stop
+        if ($item.GetValueNames() -contains $freqName) { $freqBefore = $item.GetValue($freqName) }
+        New-ItemProperty -LiteralPath $srKey -Name $freqName -Value 0 -PropertyType DWord -Force -ErrorAction Stop | Out-Null
+        $freqSet = $true
+    } catch { }
+
+    $enabledNow = $false
+    try {
+        try {
+            Checkpoint-Computer -Description $Description -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+        } catch {
+            # защита системы выключена — включаем на системном диске и пробуем ещё раз (пользователю об этом скажем)
+            Enable-ComputerRestore -Drive ($env:SystemDrive + '\') -ErrorAction Stop
+            $enabledNow = $true
+            Checkpoint-Computer -Description $Description -RestorePointType 'MODIFY_SETTINGS' -ErrorAction Stop
+        }
     } catch {
         return [pscustomobject]@{
             Status  = 'failed'
             Message = $_.Exception.Message
             Minutes = $recentMinutes
             Last    = $last
+        }
+    } finally {
+        if ($freqSet) {
+            try {
+                if ($null -eq $freqBefore) { Remove-ItemProperty -LiteralPath $srKey -Name $freqName -Force -ErrorAction Stop }
+                else { New-ItemProperty -LiteralPath $srKey -Name $freqName -Value $freqBefore -PropertyType DWord -Force -ErrorAction Stop | Out-Null }
+            } catch { }
         }
     }
 
@@ -91,7 +102,8 @@ function New-PckitRestorePoint {
 
     return [pscustomobject]@{
         Status  = if ($createdNow) { 'created' } else { 'throttled' }
-        Message = if ($createdNow) { 'точка восстановления создана' } else { 'Windows не создал точку: не чаще одного раза в сутки' }
+        Message = if ($createdNow) { 'точка восстановления создана' + $(if ($enabledNow) { ' (включил защиту системы на диске ' + $env:SystemDrive + ')' } else { '' }) } else { 'Windows не создал точку' }
+        EnabledNow = $enabledNow
         Minutes = $recentMinutes
         Last    = if ($after.Count) { $after[0] } else { $last }
     }

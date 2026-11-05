@@ -261,7 +261,32 @@ function Get-PckitCleanTargets {
     # кэши найденных рабочих программ (Adobe, Autodesk, Teams, Discord…)
     try { foreach ($wt in @(Get-PckitWorkCleanTargets)) { [void]$targets.Add($wt) } } catch { }
 
-    return $targets.ToArray()
+    return (Remove-PckitCleanDuplicates -Targets $targets.ToArray())
+}
+
+# одна и та же папка не должна попасть в две цели (кэш Discord есть и в общих целях, и в рабочих программах):
+# иначе сумма «освобожу примерно» больше, чем потом удаляется. Путь внутри уже взятого — тоже повтор.
+function Remove-PckitCleanDuplicates {
+    param([object[]]$Targets)
+    $taken = New-Object System.Collections.ArrayList
+    $out = New-Object System.Collections.ArrayList
+    foreach ($t in @($Targets)) {
+        if ($t.Kind -notin 'dir', 'files') { [void]$out.Add($t); continue }
+        $kept = @()
+        foreach ($p in @($t.Paths)) {
+            $full = Resolve-PckitPath ([string]$p)
+            $dup = $false
+            foreach ($q in $taken) {
+                if ($full -ieq $q.Path -or ($q.Kind -eq 'dir' -and (Test-PckitUnderRoot -Path $full -Root $q.Path))) { $dup = $true; break }
+            }
+            if (-not $dup) { $kept += $p }
+        }
+        if (-not $kept.Count) { continue }
+        foreach ($p in $kept) { [void]$taken.Add([pscustomobject]@{ Path = (Resolve-PckitPath ([string]$p)); Kind = $t.Kind }) }
+        $t.Paths = @($kept)
+        [void]$out.Add($t)
+    }
+    return $out.ToArray()
 }
 
 function Get-PckitMatchingFiles {
@@ -339,6 +364,40 @@ function Get-PckitCleanSizes {
     return $result.ToArray()
 }
 
+# удалить содержимое папки, не заходя в junction/symlink на любой глубине (они удаляются как ссылки):
+# Remove-Item -Recurse в Windows PowerShell 5.1 может пройти по вложенной ссылке и стереть чужие файлы.
+# Файлы удаляются по одному — занятый пропускается, остальное в той же папке всё равно чистится.
+function Remove-PckitTreeContent {
+    param([string]$Path)
+    $bytes = 0.0; $deleted = 0; $skipped = 0
+    foreach ($item in @(Get-ChildItem -LiteralPath $Path -Force -ErrorAction SilentlyContinue)) {
+        try {
+            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
+                if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName, $false) }
+                else { [IO.File]::Delete($item.FullName) }
+                $deleted++
+                continue
+            }
+            if ($item.PSIsContainer) {
+                $sub = Remove-PckitTreeContent -Path $item.FullName
+                $bytes += $sub.Bytes; $deleted += $sub.Deleted; $skipped += $sub.Skipped
+                if ($sub.Skipped -eq 0) {
+                    try { [IO.Directory]::Delete($item.FullName, $false); $deleted++ } catch { $skipped++ }
+                }
+            } else {
+                $size = [double]$item.Length
+                if ($item.Attributes -band [IO.FileAttributes]::ReadOnly) { $item.Attributes = $item.Attributes -bxor [IO.FileAttributes]::ReadOnly }
+                [IO.File]::Delete($item.FullName)
+                $bytes += $size
+                $deleted++
+            }
+        } catch {
+            $skipped++
+        }
+    }
+    return [pscustomobject]@{ Bytes = $bytes; Deleted = $deleted; Skipped = $skipped }
+}
+
 function Remove-PckitFolderContent {
     param([string]$Path)
 
@@ -356,30 +415,8 @@ function Remove-PckitFolderContent {
         throw ('чистка отменена: {0} ({1})' -f $guard.Reason, $resolved)
     }
 
-    $items = @(Get-ChildItem -LiteralPath $resolved -Force -ErrorAction SilentlyContinue)
-    foreach ($item in $items) {
-        try {
-            if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) {
-                # junction/symlink: удаляем саму ссылку, не заходя внутрь (иначе Remove-Item -Recurse в PS 5.1 может стереть цель)
-                if ($item.PSIsContainer) { [IO.Directory]::Delete($item.FullName, $false) }
-                else { Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Stop }
-                $deleted++
-                continue
-            }
-            if ($item.PSIsContainer) {
-                $size = (Get-ChildItem -LiteralPath $item.FullName -Recurse -File -Force -ErrorAction SilentlyContinue |
-                        Measure-Object -Property Length -Sum).Sum
-                Remove-Item -LiteralPath $item.FullName -Recurse -Force -ErrorAction Stop
-            } else {
-                $size = $item.Length
-                Remove-Item -LiteralPath $item.FullName -Force -ErrorAction Stop
-            }
-            $freed += [double]$size
-            $deleted++
-        } catch {
-            $skipped++
-        }
-    }
+    $r = Remove-PckitTreeContent -Path $resolved
+    $freed = $r.Bytes; $deleted = $r.Deleted; $skipped = $r.Skipped
     return [pscustomobject]@{
         FreedMb = [math]::Round($freed / 1MB, 1)
         Deleted = $deleted

@@ -3,6 +3,7 @@
 # (ported from CleanPC 2.1: Set-RegTracked / undo.json)
 
 $script:PckitStateRoot = $null
+$script:PckitJournalKinds = @('registry', 'regkeys', 'files', 'commands', 'nvidia', 'cs2')
 
 function Get-PckitStateRoot {
     if ($script:PckitStateRoot) { return $script:PckitStateRoot }
@@ -38,6 +39,7 @@ function New-PckitJournal {
         files    = New-Object System.Collections.ArrayList
         commands = New-Object System.Collections.ArrayList
         nvidia   = New-Object System.Collections.ArrayList
+        cs2      = New-Object System.Collections.ArrayList
     }
 }
 
@@ -56,11 +58,9 @@ function Read-PckitJournal {
 
     $journal = New-PckitJournal
     if ($data.created) { $journal.created = [string]$data.created }
-    foreach ($e in @($data.registry)) { if ($e) { [void]$journal.registry.Add($e) } }
-    foreach ($e in @($data.regkeys)) { if ($e) { [void]$journal.regkeys.Add($e) } }
-    foreach ($e in @($data.files)) { if ($e) { [void]$journal.files.Add($e) } }
-    foreach ($e in @($data.commands)) { if ($e) { [void]$journal.commands.Add($e) } }
-    foreach ($e in @($data.nvidia)) { if ($e) { [void]$journal.nvidia.Add($e) } }
+    foreach ($k in $script:PckitJournalKinds) {
+        foreach ($e in @($data.$k)) { if ($e) { [void]$journal.$k.Add($e) } }
+    }
     return $journal
 }
 
@@ -79,8 +79,8 @@ function Test-PckitJournalEmpty {
 
 function Get-PckitJournalCount {
     param($Journal)
-    $n = @($Journal.registry).Count + @($Journal.regkeys).Count + @($Journal.files).Count + @($Journal.commands).Count
-    if ($Journal.nvidia) { $n += @($Journal.nvidia | Where-Object { $_ }).Count }
+    $n = 0
+    foreach ($k in $script:PckitJournalKinds) { $n += @($Journal.$k | Where-Object { $_ }).Count }
     return $n
 }
 
@@ -234,30 +234,92 @@ function Get-PckitUndoPlan {
                 Detail = if ([string]$e.restore -eq 'value') { 'вернуть прежнее значение' } else { 'вернуть «как в драйвере»' }
             })
     }
+    foreach ($e in @($Journal.cs2)) {
+        if (-not $e) { continue }
+        [void]$plan.Add([pscustomobject]@{ Kind = 'CS2'; Title = (Get-PckitCs2EntryTitle $e); Detail = 'убрать только то, что добавил pckit' })
+    }
     return $plan.ToArray()
+}
+
+# одна команда отката: { Status = ok|skip|fail; Message }
+# то, чего в системе больше нет (задачу удалило обновление Windows, службу — удаление программы), вернуть нельзя: это пропуск, а не ошибка
+function Invoke-PckitUndoCommand {
+    param([string]$Undo)
+    $res = { param($s, $m) [pscustomobject]@{ Status = $s; Message = $m } }
+
+    # запуск службы — средствами PowerShell: «уже запущена» не считаем ошибкой (net start вернул бы код 2)
+    if ($Undo -match '^net start "(.+)"$') {
+        $name = $matches[1]
+        $svc = Get-Service -Name $name -ErrorAction SilentlyContinue
+        if (-not $svc) { return (& $res 'skip' 'службы больше нет') }
+        if ([string]$svc.Status -eq 'Running') { return (& $res 'ok' 'уже запущена') }
+        try { Start-Service -Name $name -ErrorAction Stop; return (& $res 'ok' '') }
+        catch { return (& $res 'fail' $_.Exception.Message) }
+    }
+    if ($Undo -match '^del /f /q "(.+)"$' -and -not (Test-Path -LiteralPath $matches[1])) { return (& $res 'skip' 'файла уже нет') }
+
+    & cmd /c $Undo 2>&1 | Out-Null
+    $code = $LASTEXITCODE
+    if ($code -eq 0) { return (& $res 'ok' '') }
+
+    if ($Undo -match '^schtasks /Change /TN "(.+)" /ENABLE$') {
+        & schtasks /Query /TN $matches[1] 2>&1 | Out-Null
+        if ($LASTEXITCODE -ne 0) { return (& $res 'skip' 'задачи больше нет') }
+    }
+    if ($Undo -match '^sc config "(.+?)" ') {
+        & sc.exe query $matches[1] 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 1060) { return (& $res 'skip' 'службы больше нет') }
+    }
+    return (& $res 'fail' ("код $code"))
+}
+
+# порядок отката команд: последнее изменение — первым (иначе прежняя схема питания перекрывалась бы более новой записью);
+# запуск служб — в самом конце, когда им уже вернули тип запуска
+function Get-PckitUndoCommandOrder {
+    param($Commands)
+    $list = @($Commands | Where-Object { $_ })
+    [array]::Reverse($list)
+    $late = @($list | Where-Object { [string]$_.undo -match '^net start ' })
+    $early = @($list | Where-Object { [string]$_.undo -notmatch '^net start ' })
+    return , @($early + $late)
 }
 
 function Restore-PckitJournal {
     param($Journal, [switch]$Run, [string]$Since)
 
     # -Since: откатить только то, что записано начиная с этого времени (последняя партия)
-    $rest = $null
-    if ($Since) {
-        $sel = New-PckitJournal
-        $rest = New-PckitJournal
-        $rest.created = [string]$Journal.created
-        foreach ($k in 'registry', 'regkeys', 'files', 'commands', 'nvidia') {
-            foreach ($e in @($Journal.$k)) {
-                if (-not $e) { continue }
-                if ([string]$e.at -ge $Since) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
-            }
+    $sel = New-PckitJournal
+    $rest = New-PckitJournal
+    $rest.created = [string]$Journal.created
+    foreach ($k in $script:PckitJournalKinds) {
+        foreach ($e in @($Journal.$k)) {
+            if (-not $e) { continue }
+            if (-not $Since -or [string]$e.at -ge $Since) { [void]$sel.$k.Add($e) } else { [void]$rest.$k.Add($e) }
         }
-        $Journal = $sel
     }
+    $Journal = $sel
+    # что не получилось вернуть — остаётся в журнале для повтора; вернувшееся и невозвратимое (skip) — убираем
+    $keep = New-PckitJournal
 
     $result = New-Object System.Collections.ArrayList
     $ok = 0
     $failed = 0
+    $note = {
+        param($Kind, $Title, $Status, $Msg, $ListName, $Entry)
+        if ($Status -eq 'ok') { $script:__ok++ } elseif ($Status -eq 'fail') { $script:__failed++; [void]$keep.$ListName.Add($Entry) }
+        [void]$result.Add([pscustomobject]@{ Kind = $Kind; Title = $Title; Status = $Status; Message = $Msg })
+    }
+    $script:__ok = 0; $script:__failed = 0
+
+    # CS2: убрать только своё (параметр запуска, блок в autoexec.cfg), остальное пользователя не трогаем
+    $cs2 = @($Journal.cs2)
+    [array]::Reverse($cs2)
+    foreach ($e in $cs2) {
+        if (-not $e) { continue }
+        $status = 'dry'; $msg = ''
+        if ($Run) { $r = Restore-PckitCs2Entry -Entry $e; $status = $r.Status; $msg = $r.Message }
+        & $note 'CS2' (Get-PckitCs2EntryTitle $e) $status $msg 'cs2' $e
+    }
 
     # files: newest first
     $files = @($Journal.files)
@@ -272,19 +334,21 @@ function Restore-PckitJournal {
                     if (Test-Path -LiteralPath $e.target) { Remove-Item -LiteralPath $e.target -Recurse -Force -ErrorAction SilentlyContinue }
                     New-Item -ItemType Directory -Force -Path (Split-Path -Parent $e.target) | Out-Null
                     Move-Item -LiteralPath $e.backup -Destination $e.target -Force
-                    $status = 'ok'; $ok++
+                    $status = 'ok'
                 } else {
                     $status = 'skip'; $msg = 'бэкап не найден'
                 }
             } catch {
-                $status = 'fail'; $failed++; $msg = $_.Exception.Message
+                $status = 'fail'; $msg = $_.Exception.Message
             }
         }
-        [void]$result.Add([pscustomobject]@{ Kind = 'файл'; Title = [string]$e.target; Status = $status; Message = $msg })
+        & $note 'файл' ([string]$e.target) $status $msg 'files' $e
     }
 
     # registry keys
-    foreach ($e in @($Journal.regkeys)) {
+    $keys = @($Journal.regkeys)
+    [array]::Reverse($keys)
+    foreach ($e in $keys) {
         if (-not $e) { continue }
         $status = 'dry'
         $msg = ''
@@ -292,15 +356,15 @@ function Restore-PckitJournal {
             try {
                 if (Test-Path -LiteralPath $e.backup) {
                     & reg import $e.backup 2>&1 | Out-Null
-                    if ($LASTEXITCODE -eq 0) { $status = 'ok'; $ok++ } else { $status = 'fail'; $failed++; $msg = "reg код $LASTEXITCODE" }
+                    if ($LASTEXITCODE -eq 0) { $status = 'ok' } else { $status = 'fail'; $msg = "reg код $LASTEXITCODE" }
                 } else {
                     $status = 'skip'; $msg = 'копия не найдена'
                 }
             } catch {
-                $status = 'fail'; $failed++; $msg = $_.Exception.Message
+                $status = 'fail'; $msg = $_.Exception.Message
             }
         }
-        [void]$result.Add([pscustomobject]@{ Kind = 'ветка реестра'; Title = [string]$e.key; Status = $status; Message = $msg })
+        & $note 'ветка реестра' ([string]$e.key) $status $msg 'regkeys' $e
     }
 
     # registry values: reverse order
@@ -328,41 +392,37 @@ function Restore-PckitJournal {
                         Remove-ItemProperty -LiteralPath $e.path -Name $e.name -Force
                     }
                 }
-                $status = 'ok'; $ok++
+                $status = 'ok'
             } catch {
-                $status = 'fail'; $failed++; $msg = $_.Exception.Message
+                $status = 'fail'; $msg = $_.Exception.Message
             }
         }
-        [void]$result.Add([pscustomobject]@{ Kind = 'параметр'; Title = ('{0} :: {1}' -f $e.path, $e.name); Status = $status; Message = $msg })
+        & $note 'параметр' ('{0} :: {1}' -f $e.path, $e.name) $status $msg 'registry' $e
     }
 
     # commands
-    foreach ($e in @($Journal.commands)) {
-        if (-not $e) { continue }
+    foreach ($e in (Get-PckitUndoCommandOrder -Commands $Journal.commands)) {
         $status = 'dry'
         $msg = ''
         if ($Run) {
-            try {
-                & cmd /c $e.undo 2>&1 | Out-Null
-                if ($LASTEXITCODE -eq 0) { $status = 'ok'; $ok++ } else { $status = 'fail'; $failed++; $msg = "код $LASTEXITCODE" }
-            } catch {
-                $status = 'fail'; $failed++; $msg = $_.Exception.Message
-            }
+            try { $r = Invoke-PckitUndoCommand -Undo ([string]$e.undo); $status = $r.Status; $msg = $r.Message }
+            catch { $status = 'fail'; $msg = $_.Exception.Message }
         }
-        [void]$result.Add([pscustomobject]@{ Kind = 'команда'; Title = [string]$e.undo; Status = $status; Message = $msg })
+        & $note 'команда' ([string]$e.undo) $status $msg 'commands' $e
     }
 
     # профиль драйвера NVIDIA
-    if ($Journal.nvidia -and @($Journal.nvidia | Where-Object { $_ }).Count) {
+    if (@($Journal.nvidia | Where-Object { $_ }).Count) {
         foreach ($r in @(Restore-PckitNvidiaJournal -Entries @($Journal.nvidia) -Run:$Run)) {
-            if ($r.Status -eq 'ok') { $ok++ } elseif ($r.Status -eq 'fail') { $failed++ }
-            [void]$result.Add($r)
+            & $note $r.Kind $r.Title $r.Status $r.Message 'nvidia' $r.Entry
         }
     }
+    $ok = $script:__ok; $failed = $script:__failed
 
-    if ($Run -and $failed -eq 0) {
-        if ($rest) { Save-PckitJournal -Journal $rest | Out-Null }
-        else { Save-PckitJournal -Journal (New-PckitJournal) | Out-Null }
+    if ($Run) {
+        # в журнале остаются более ранние партии и то, что не удалось вернуть
+        foreach ($k in $script:PckitJournalKinds) { foreach ($e in @($keep.$k)) { if ($e) { [void]$rest.$k.Add($e) } } }
+        Save-PckitJournal -Journal $rest | Out-Null
     }
 
     return [pscustomobject]@{
@@ -417,7 +477,16 @@ function Get-PckitJournalSummary {
             })
     }
 
+    foreach ($e in @($Journal.cs2)) {
+        if (-not $e) { continue }
+        [void]$rows.Add([pscustomobject]@{
+                At = [string]$e.at; Kind = 'CS2'; Title = (Get-PckitCs2EntryTitle $e)
+                Detail = $(if ([string]$e.kind -eq 'launch') { 'было: без этих параметров' } elseif ($e.created) { 'было: файла не было' } else { 'было: без блока pckit' })
+            })
+    }
     return $rows.ToArray()
 }
 # профиль драйвера NVIDIA: запись и откат (journal.nvidia)
 . (Join-Path $PSScriptRoot 'Nvidia.ps1')
+# CS2: autoexec.cfg и параметры запуска (journal.cs2)
+. (Join-Path $PSScriptRoot 'Cs2.ps1')

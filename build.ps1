@@ -15,7 +15,7 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem | Out-Null
 
 # 1. проверка синтаксиса всех скриптов до сборки
 $bad = 0
-foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '\\(dist|tests|build)\\' }) {
+foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.ps1' | Where-Object { $_.FullName -notmatch '[\\/](dist|tests|build)[\\/]' }) {
     $errors = $null
     [void][System.Management.Automation.Language.Parser]::ParseFile($f.FullName, [ref]$null, [ref]$errors)
     foreach ($e in @($errors)) { $bad++; Write-Host ('  ошибка: {0}:{1} {2}' -f $f.Name, $e.Extent.StartLineNumber, $e.Message) -ForegroundColor Red }
@@ -24,7 +24,7 @@ foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.ps1' | Where
         $bad++; Write-Host ('  нет UTF-8 BOM: {0} (кириллица сломается в PowerShell 5.1)' -f $f.Name) -ForegroundColor Red
     }
 }
-foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.json' | Where-Object { $_.FullName -notmatch '\\(dist|tests|build|state)\\' }) {
+foreach ($f in Get-ChildItem -LiteralPath $root -Recurse -Filter '*.json' | Where-Object { $_.FullName -notmatch '[\\/](dist|tests|build|state)[\\/]' }) {
     try { [void](Get-Content -LiteralPath $f.FullName -Raw -Encoding UTF8 | ConvertFrom-Json) }
     catch { $bad++; Write-Host ('  битый JSON: {0} — {1}' -f $f.Name, $_.Exception.Message) -ForegroundColor Red }
 }
@@ -45,7 +45,7 @@ $memory = New-Object System.IO.MemoryStream
 $zip = New-Object System.IO.Compression.ZipArchive($memory, [System.IO.Compression.ZipArchiveMode]::Create, $true)
 try {
     foreach ($full in $sorted) {
-        $rel = $full.Substring($root.Length).TrimStart('\') -replace '\\', '/'
+        $rel = $full.Substring($root.Length).TrimStart('\', '/') -replace '\\', '/'
         $entry = $zip.CreateEntry($rel, [System.IO.Compression.CompressionLevel]::Optimal)
         $entry.LastWriteTime = [DateTimeOffset]::new(2026, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
         $stream = $entry.Open()
@@ -69,15 +69,18 @@ $out = Join-Path $dist 'pckit-by-odilbek.cmd'
 [IO.File]::WriteAllText($out, $loader, (New-Object System.Text.UTF8Encoding($false)))
 
 $cmdSha = (Get-FileHash -LiteralPath $out -Algorithm SHA256).Hash
+$version = ([regex]::Match([IO.File]::ReadAllText((Join-Path $root 'engine\Common.ps1')), "PckitVersion = '([^']+)'")).Groups[1].Value
 $readme = @"
-pckit by odilbek — как пользоваться
+pckit by odilbek $version — как пользоваться
 
 1. Положите файл pckit-by-odilbek.cmd на рабочий стол и запустите двойным щелчком.
 2. Windows спросит разрешение (UAC) — нажмите «Да». Права администратора нужны для чистки и настроек.
 3. Если SmartScreen пишет «Windows защитила ваш компьютер» — «Подробнее» → «Выполнить в любом случае» (файл не подписан цифровой подписью).
 
+Главная: «Ускорить для игр» (начните с неё), «Максимальное ускорение» (плюс экспертные настройки), «Для работы», «Почистить диск», «Проверить ПК», «Вернуть как было».
+
 Что умеет: ускорить ПК для игр, почистить кэши, замерить результат «до и после», сохранить программы и настройки в один файл .pckit и вернуть их после переустановки Windows, проверить состояние ПК.
-Перед изменениями программа создаёт точку восстановления и пишет журнал: всё отменяется кнопкой «Отменить изменения».
+Перед изменениями программа создаёт точку восстановления и пишет журнал: всё отменяется кнопкой «Вернуть как было».
 
 Файл .pckit не шифруется (там могут быть ключи и пароли Wi-Fi) — не отправляйте его другим.
 

@@ -49,7 +49,8 @@ if (-not $isAdminNow -and -not $SelfTest -and -not $Headless) {
 }
 
 # ------------------------------------------------------------------- журнал ошибок и защита от падений
-$script:PckitAppVersion = '2.2.0'
+. (Join-Path $script:Root 'engine\Common.ps1')
+$script:PckitAppVersion = $script:PckitVersion
 $script:LogDir = Join-Path $env:LOCALAPPDATA 'pckit\logs'
 try { if (-not (Test-Path -LiteralPath $script:LogDir)) { New-Item -ItemType Directory -Force -Path $script:LogDir | Out-Null } } catch { }
 $script:LogFile = Join-Path $script:LogDir ('pckit-{0}.log' -f (Get-Date).ToString('yyyy-MM-dd'))
@@ -76,7 +77,7 @@ function Show-UiCrash {
     $script:CrashShown = $true
     try {
         $a = [System.Windows.Forms.MessageBox]::Show(
-            ("Что-то пошло не так:`r`n{0}`r`n`r`nПрограмма продолжит работать, ваши настройки не пострадали — все изменения записаны в журнал и отменяются в «Сделано».`r`n`r`nСохранить отчёт об ошибке на Рабочий стол, чтобы отправить разработчику?" -f $msg),
+            ("Что-то пошло не так:`r`n{0}`r`n`r`nПрограмма продолжит работать, ваши настройки не пострадали — все изменения записаны в журнал и отменяются кнопкой «Вернуть как было».`r`n`r`nСохранить отчёт об ошибке на Рабочий стол, чтобы отправить разработчику?" -f $msg),
             'pckit by odilbek — ошибка', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Error)
         if ($a -eq [System.Windows.Forms.DialogResult]::Yes) { Save-UiLogBundle | Out-Null }
     } finally { $script:CrashShown = $false }
@@ -604,7 +605,7 @@ $script:HomeCards = New-Object System.Collections.ArrayList
 $script:CardHot = @{}
 
 function Set-HomeLayout {
-    # «Всё сразу» — на всю ширину, остальные — в две колонки; на узком окне карточки не выходят за край
+    # «Ускорить для игр» — на всю ширину, остальные — в две колонки; на узком окне карточки не выходят за край
     $w = [Math]::Max(520, $tabHome.ClientSize.Width)
     $gap = 24
     $cardW = [int](($w - 3 * $gap) / 2)
@@ -629,7 +630,7 @@ function Set-HomeLayout {
         $bottom = $c.Top + $cardH
         foreach ($ch in $c.Controls) { if ($ch -is [System.Windows.Forms.Label] -and $ch.Width -gt 100) { $ch.Width = [Math]::Max(200, $c.Width - 100) } }
     }
-    $homeProgress.Top = $bottom + 12
+    if ($homeMore) { $homeMore.Top = $bottom + 14; $homeProgress.Top = $bottom + 42 } else { $homeProgress.Top = $bottom + 12 }
 }
 # иконки — символы шрифта Segoe MDL2 Assets
 $script:Icons = @{
@@ -637,30 +638,56 @@ $script:Icons = @{
     Health = [string][char]0xE95E; Save = [string][char]0xE74E; Restore = [string][char]0xE896; Manual = [string][char]0xE8B7
     Done = [string][char]0xE81C; Boost = [string][char]0xEC4A; Startup = [string][char]0xE7E8
 }
-[void](New-HomeCard -Icon ([string][char]0xE945) -Title 'Всё сразу — для игр' -Subtitle 'Настройки под железо (Windows, видеокарта, CS2), чистка и что сделать руками. Всё отменяется.' -Left 24 -Top 96 -OnClick {
-        Invoke-HomeAll
+# Главная: шесть понятных кнопок. Редкое (сеть, отчёт, «до и после») — строкой ссылок ниже и в меню слева.
+$cardBoost = New-HomeCard -Icon $script:Icons.Boost -Title 'Ускорить для игр' -Subtitle 'Рекомендуется. Подберу безопасные настройки под ваш ПК (Windows, видеокарта, CS2), почищу мусор и скажу, что сделать руками.' -Left 24 -Top 96 -OnClick {
+    Invoke-HomeAll
+}
+$cardBoost.Name = 'wide'
+[void](New-HomeCard -Icon ([string][char]0xE945) -Title 'Максимальное ускорение' -Subtitle 'Всё из «Ускорить» плюс экспертные настройки: службы, телеметрия, индексация. Для тех, кому важен каждый кадр.' -Left 24 -Top 96 -OnClick {
+        Invoke-HomeAll -Max
     })
-[void](New-HomeCard -Icon ([string][char]0xE821) -Title 'Для работы' -Subtitle 'Офис, Photoshop, AutoCAD, Revit: мусор и кэши программ, лишний фон, крупные забытые файлы.' -Left 554 -Top 96 -OnClick {
+[void](New-HomeCard -Icon ([string][char]0xE821) -Title 'Для работы' -Subtitle 'Офис, Photoshop, AutoCAD, Revit: настройки без игровых, мусор и кэши программ, крупные забытые файлы.' -Left 554 -Top 96 -OnClick {
         Invoke-HomeWork
     })
-[void](New-HomeCard -Icon $script:Icons.Boost -Title 'Ускорить' -Subtitle 'Только настройки: Windows, видеокарта и CS2 — подобранные под ваш ПК.' -Left 24 -Top 96 -OnClick {
-        Invoke-HomeBoost
-    })
-[void](New-HomeCard -Icon $script:Icons.Clean -Title 'Почистить' -Subtitle 'Безопасные кэши и временные файлы. Сначала покажу, сколько освободится.' -Left 554 -Top 96 -OnClick {
+[void](New-HomeCard -Icon $script:Icons.Clean -Title 'Почистить диск' -Subtitle 'Только безопасные кэши и временные файлы. Сначала покажу, сколько места освободится.' -Left 554 -Top 96 -OnClick {
         Invoke-HomeClean
     })
-[void](New-HomeCard -Icon $script:Icons.Health -Title 'Проверить' -Subtitle 'Что мешает играм: монитор, память, драйвер, настройки CS2. Ничего не меняет.' -Left 554 -Top 262 -OnClick {
+[void](New-HomeCard -Icon $script:Icons.Health -Title 'Проверить ПК' -Subtitle 'Найду, что мешает: монитор, память, драйвер, настройки CS2. Ничего не меняю.' -Left 554 -Top 262 -OnClick {
         Invoke-HomeCheck
     })
-[void](New-HomeCard -Icon $script:Icons.Result -Title 'Результат' -Subtitle 'Честное «до и после»: стало лучше, хуже или без разницы. Если хуже — откачу.' -Left 24 -Top 262 -OnClick {
-        Invoke-HomeResult
+[void](New-HomeCard -Icon ([string][char]0xE7A7) -Title 'Вернуть как было' -Subtitle 'Отменить всё, что изменил pckit. Ваши файлы и программы не трогаются.' -Left 24 -Top 262 -OnClick {
+        Invoke-DoneUndo
     })
-[void](New-HomeCard -Icon ([string][char]0xE968) -Title 'Сеть для CS2' -Subtitle 'Пинг, скачки и потери до серверов Valve, лаги под нагрузкой. Виноват интернет или ПК?' -Left 24 -Top 428 -OnClick {
-        Invoke-HomeNetwork
+
+# «Ещё»: то, что нужно не каждый день
+$homeMore = New-Object System.Windows.Forms.LinkLabel
+$homeMoreItems = @(
+    @('Результат «до и после»', { Invoke-HomeResult }),
+    @('Сеть для CS2', { Invoke-HomeNetwork }),
+    @('Отчёт для друга', { Invoke-HomeShare }),
+    @('Сохранить программы и настройки перед переустановкой Windows', { $tabs.SelectedTab = $tabSave; Update-NavSelection })
+)
+$homeMoreText = 'Ещё:  '
+$homeMoreLinks = @()
+foreach ($mi in $homeMoreItems) {
+    if ($homeMoreLinks.Count) { $homeMoreText += '   ·   ' }
+    $homeMoreLinks += , @($homeMoreText.Length, $mi[0].Length, $mi[1])
+    $homeMoreText += $mi[0]
+}
+$homeMore.Text = $homeMoreText
+$homeMore.Links.Clear()
+foreach ($l in $homeMoreLinks) { [void]$homeMore.Links.Add($l[0], $l[1], $l[2]) }
+$homeMore.Font = New-Object System.Drawing.Font('Segoe UI', 9.5)
+$homeMore.LinkColor = $script:Theme.Accent
+$homeMore.ActiveLinkColor = $script:Theme.Accent
+$homeMore.ForeColor = $script:Theme.Muted
+$homeMore.AutoSize = $true
+$homeMore.Location = New-Object System.Drawing.Point(26, 440)
+$homeMore.Add_LinkClicked({
+        param($s, $e)
+        try { & $e.Link.LinkData } catch { [void][System.Windows.Forms.MessageBox]::Show(('Не удалось выполнить действие: ' + $_.Exception.Message), 'pckit by odilbek') }
     })
-[void](New-HomeCard -Icon ([string][char]0xE72D) -Title 'Отчёт для друга' -Subtitle 'Всё о ПК одним файлом: железо, проблемы, что включено. Отправьте тому, кто поможет.' -Left 554 -Top 428 -OnClick {
-        Invoke-HomeShare
-    })
+$tabHome.Controls.Add($homeMore)
 $homeExpertLink.AccessibleName = 'Все настройки (экспертный режим)'
 $homeNext.Add_LinkClicked({ param($s, $e) if ($s.Tag) { try { & $s.Tag } catch { } } })
 $tabHome.Add_Resize({ Set-HomeLayout })
@@ -1463,7 +1490,7 @@ $tabStartup.Controls.Add($startupLayout)
 
 # ------------------------------------------------------------------ done tab
 $tabDone = New-Object System.Windows.Forms.TabPage
-$tabDone.Text = '  Сделано  '
+$tabDone.Text = '  История и отмена  '
 $tabDone.BackColor = [System.Drawing.Color]::FromArgb(250, 250, 252)
 $tabDone.Padding = New-Object System.Windows.Forms.Padding(4)
 
@@ -1768,31 +1795,36 @@ function New-NavHeader {
 }
 
 $navTop = 84
+# меню: «Главная» — для всех; ниже — то же самое по шагам, для тех, кто хочет выбрать сам
+[void](New-NavItem -Icon $script:Icons.Home -Text 'Главная' -Page $tabHome -Top $navTop)
+$navTop += 46
+New-NavHeader -Text 'Выбрать самому' -Top $navTop
+$navTop += 24
 foreach ($entry in @(
-        @($script:Icons.Home, 'Главная', $tabHome),
-        @($script:Icons.Game, 'Игры', $tabGame),
+        @($script:Icons.Game, 'Настройки', $tabGame),
         @($script:Icons.Clean, 'Чистка', $tabClean),
         @($script:Icons.Startup, 'Автозагрузка', $tabStartup),
-        @($script:Icons.Result, 'Результат', $tabResult),
         @($script:Icons.Health, 'Проверка', $tabHealth),
+        @($script:Icons.Result, 'До и после', $tabResult),
         @(([string][char]0xE968), 'Сеть', $tabNetwork),
-        @($script:Icons.Done, 'Сделано', $tabDone))) {
+        @($script:Icons.Done, 'История и отмена', $tabDone))) {
     [void](New-NavItem -Icon $entry[0] -Text $entry[1] -Page $entry[2] -Top $navTop)
-    $navTop += 40
+    $navTop += 38
 }
-$navTop += 10
+$navTop += 8
 New-NavHeader -Text 'Перенос на новую Windows' -Top $navTop
 $navTop += 24
 foreach ($entry in @(
         @($script:Icons.Save, 'Сохранить', $tabSave),
         @($script:Icons.Restore, 'Вернуть', $tabRestore),
-        @($script:Icons.Manual, 'Вручную', $tabManual))) {
+        @($script:Icons.Manual, 'Установить вручную', $tabManual))) {
     [void](New-NavItem -Icon $entry[0] -Text $entry[1] -Page $entry[2] -Top $navTop)
-    $navTop += 40
+    $navTop += 38
 }
 
 $navFoot = New-Object System.Windows.Forms.Label
-$navFoot.Text = 'Все изменения записываются в журнал и отменяются в разделе «Сделано».'
+$navFoot.Text = ''
+$navFoot.Visible = $false   # подсказка про отмену теперь — кнопка «Вернуть как было» на главной
 $navFoot.Font = New-Object System.Drawing.Font('Segoe UI', 8.5)
 $navFoot.ForeColor = $script:Theme.Muted
 $navFoot.Size = New-Object System.Drawing.Size(190, 48)
@@ -1834,7 +1866,7 @@ function Show-AboutDialog {
     $dlg.Controls.Add($t)
 
     $d = New-Object System.Windows.Forms.Label
-    $d.Text = "Бесплатная настройка ПК для игр (CS2) и для работы.`r`n`r`n• Только безопасные для FACEIT и VAC изменения.`r`n• Каждое изменение записывается и отменяется в «Сделано».`r`n• Перед изменениями — точка восстановления Windows.`r`n• Ничего не отправляет в интернет: обращается только к сайтам NVIDIA, Steam и Cloudflare (тест сети) — и только когда вы нажали кнопку."
+    $d.Text = "Бесплатная настройка ПК для игр (CS2) и для работы.`r`n`r`n• Только безопасные для FACEIT и VAC изменения.`r`n• Каждое изменение записывается и отменяется кнопкой «Вернуть как было».`r`n• Перед изменениями — точка восстановления Windows.`r`n• Ничего не отправляет в интернет: обращается только к сайтам NVIDIA, Steam и Cloudflare (тест сети) — и только когда вы нажали кнопку."
     $d.Location = New-Object System.Drawing.Point(20, 50); $d.Size = New-Object System.Drawing.Size(425, 150)
     $d.ForeColor = [System.Drawing.Color]::FromArgb(70, 70, 80)
     $dlg.Controls.Add($d)
@@ -1882,7 +1914,7 @@ function Invoke-UninstallPckit {
         $body = { param($root) . (Join-Path $root 'engine\Common.ps1'); . (Join-Path $root 'engine\Journal.ps1'); return (Restore-PckitJournal -Journal (Read-PckitJournal) -Run) }
         $res = (Invoke-Remote -Body $body -Arguments @($script:Root))[0]
         if ($res.Failed -gt 0) {
-            [void][System.Windows.Forms.MessageBox]::Show(("Вернуть удалось не всё (ошибок: {0}). Удаление остановлено, чтобы не потерять журнал — посмотрите «Сделано»." -f $res.Failed), 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            [void][System.Windows.Forms.MessageBox]::Show(("Вернуть удалось не всё (ошибок: {0}). Удаление остановлено, чтобы не потерять журнал — посмотрите «История и отмена»." -f $res.Failed), 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Warning)
             return
         }
     }
@@ -2228,8 +2260,11 @@ function Invoke-DoneUndo {
         }
         $res = (Invoke-Remote -Body $body -Arguments @($script:Root))[0]
         Fill-DoneList
+        try { Update-HomeNext } catch { }
+        $left = @($res.Items | Where-Object { $_.Status -eq 'fail' } | Select-Object -First 5 | ForEach-Object { '  • {0}: {1}' -f $_.Title, $_.Message })
+        $tail = if ($left.Count) { "`r`n`r`nНе получилось (останется в «История и отмена», можно повторить):`r`n" + ($left -join "`r`n") } else { "`r`n`r`nПерезагрузите ПК, чтобы всё вернулось полностью." }
         [void][System.Windows.Forms.MessageBox]::Show(
-            ('Отменено: {0}, ошибок: {1}.' -f $res.Ok, $res.Failed), 'pckit by odilbek',
+            ('Отменено: {0}, ошибок: {1}.' -f $res.Ok, $res.Failed) + $tail, 'pckit by odilbek',
             [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
     } catch {
         [void][System.Windows.Forms.MessageBox]::Show(('Не удалось отменить: ' + $_.Exception.Message), 'pckit by odilbek',
@@ -2376,7 +2411,7 @@ function Invoke-ResultCompare {
     $beforeInfo = Get-LatestBeforeSnapshot
     if (-not $beforeInfo) {
         $ask = [System.Windows.Forms.MessageBox]::Show(
-            "Замера «до» ещё нет — сравнивать не с чем.`r`n`r`nЗамерить компьютер сейчас (около 20 секунд)? Потом примените «Ускорить» или «Почистить» и нажмите «Результат» ещё раз.",
+            "Замера «до» ещё нет — сравнивать не с чем.`r`n`r`nЗамерить компьютер сейчас (около 20 секунд)? Потом нажмите «Ускорить для игр» или «Почистить диск» и нажмите «Результат» ещё раз.",
             'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
         if ($ask -ne [System.Windows.Forms.DialogResult]::Yes) { return $null }
         if ($SetText) { & $SetText 'Замеряю ПК (около 20 секунд, не трогайте компьютер)...' }
@@ -2609,7 +2644,7 @@ function Show-WelcomeOnce {
     $flag = Join-Path $env:LOCALAPPDATA 'pckit\welcome-v2.flag'
     if (Test-Path -LiteralPath $flag) { return }
     [void][System.Windows.Forms.MessageBox]::Show(
-        ("Привет! Это pckit {0}.`r`n`r`n1. Игровой ПК — нажмите «Всё сразу — для игр».`r`n   Рабочий ПК (офис, Photoshop, AutoCAD, Revit) — «Для работы».`r`n2. Перезагрузите компьютер.`r`n3. Откройте pckit снова — он сам сравнит «до» и «после».`r`n`r`nВсё, что программа меняет, отменяется в разделе «Сделано». Наведите мышь на кнопку — появится подсказка." -f $script:PckitAppVersion),
+        ("Привет! Это pckit {0}.`r`n`r`n1. Игровой ПК — нажмите «Ускорить для игр».`r`n   Хотите выжать всё — «Максимальное ускорение».`r`n   Рабочий ПК (офис, Photoshop, AutoCAD, Revit) — «Для работы».`r`n2. Перезагрузите компьютер.`r`n3. Откройте pckit снова — он сам сравнит «до» и «после».`r`n`r`nВсё, что программа меняет, отменяется кнопкой «Вернуть как было». Наведите мышь на кнопку — появится подсказка." -f $script:PckitAppVersion),
         'pckit by odilbek — добро пожаловать', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
     try {
         $dir = Split-Path -Parent $flag
@@ -2627,7 +2662,7 @@ function Update-HomeNext {
         } elseif (-not $empty -and (Get-PendingBeforeSnapshot)) {
             $text = 'Дальше: перезагрузите ПК — потом pckit сам предложит сравнить результат'
         } elseif ($empty) {
-            $text = 'С чего начать: «Всё сразу — для игр» или «Для работы» — займёт пару минут'
+            $text = 'С чего начать: «Ускорить для игр» или «Для работы» — займёт пару минут'
         } elseif ($script:Health -and ($script:Health.Bad + $script:Health.Warn) -gt 0) {
             $text = ('Дальше: посмотрите замечания ({0}) — часть из них исправляется руками →' -f ($script:Health.Bad + $script:Health.Warn))
             $action = { Set-UiMode $true; $tabs.SelectedTab = $tabHealth; Update-NavSelection }
@@ -2714,10 +2749,16 @@ function Invoke-HomeCleanRun {
 # что подобрано под этот ПК и ещё не включено: { Hw, Recommended, DoneCount }
 function Get-HomeBoostPlan {
     # -Ids: свой набор (например, «Для работы») — берём из него всё, что не исключено правилами skipIf для этого железа
-    param([string[]]$Ids)
+    # -Max: всё, что подходит этому железу, включая экспертные и слабые настройки (кроме мифов и того, что вредит этому ПК по skipIf)
+    param([string[]]$Ids, [switch]$Max)
     $hw = Get-UiHardware
     $actions = @(Get-PckitActions -Directory (Join-Path $script:Root 'data'))
-    if ($Ids) {
+    if ($Max) {
+        $candidates = @($actions | Where-Object {
+                $adv = Get-PckitSmartAdvice -Action $_ -Hw $hw
+                $adv.Applicable -and [string]$_.id -ne 'work.gpu' -and -not ($_.skipIf -and (Test-PckitHwCondition -Cond $_.skipIf -Hw $hw))
+            })
+    } elseif ($Ids) {
         $candidates = @($actions | Where-Object { $Ids -contains [string]$_.id -and -not $_.myth -and -not ($_.skipIf -and (Test-PckitHwCondition -Cond $_.skipIf -Hw $hw)) })
     } else {
         $candidates = @($actions | Where-Object { Test-ActionRecommended $_ })
@@ -2762,9 +2803,9 @@ function New-HomeRestorePoint {
             return (New-PckitRestorePoint -Run)
         }
         $rp = (Invoke-Remote -Body $rpBody -Arguments @($script:Root))[0]
-        if ($rp.Status -eq 'created') { return ' Точка восстановления создана.' }
+        if ($rp.Status -eq 'created') { return (' Точка восстановления создана.' + $(if ($rp.EnabledNow) { (' Для этого включена защита системы на диске {0}.' -f $env:SystemDrive) } else { '' })) }
         if ($rp.Status -eq 'exists') { return ' Свежая точка восстановления уже есть.' }
-        if ($rp.Status -eq 'throttled') { return ' (Windows создаёт точки не чаще раза в сутки.)' }
+        if ($rp.Status -eq 'throttled') { return ' (Windows не создал точку восстановления; изменения всё равно отменяются кнопкой «Вернуть как было».)' }
         if ($rp.Status -eq 'failed') { throw $rp.Message }
         return ''
     } catch {
@@ -2830,7 +2871,7 @@ function Invoke-HomeBoost {
 
     if (-not $recommended.Count) {
         [void][System.Windows.Forms.MessageBox]::Show(
-            ("Ваш ПК уже настроен: всё, что подходит именно ему ({0}), включено.`r`n`r`nОстальное можно посмотреть во вкладке «Игры», а что ещё мешает — в «Проверке»." -f (Format-PckitHardwareLine $plan.Hw)),
+            ("Ваш ПК уже настроен: всё, что подходит именно ему ({0}), включено.`r`n`r`nОстальное можно посмотреть во разделе «Настройки», а что ещё мешает — в «Проверке»." -f (Format-PckitHardwareLine $plan.Hw)),
             'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         return
     }
@@ -2851,7 +2892,7 @@ function Invoke-HomeBoost {
         $res = Invoke-HomeBoostRun -Ids @($recommended | ForEach-Object { $_.id })
         $okCount = @($res.Results).Count - $res.Failed
         [void][System.Windows.Forms.MessageBox]::Show(
-            ("Готово. Применено настроек: {0}, ошибок: {1}.{2}{3}`r`n`r`n{4}`r`nОтменить всё — раздел «Сделано»." -f $okCount, $res.Failed, $rpNote, (Get-ApplyFailText $res), $script:RebootText),
+            ("Готово. Применено настроек: {0}, ошибок: {1}.{2}{3}`r`n`r`n{4}`r`nОтменить всё — кнопка «Вернуть как было»." -f $okCount, $res.Failed, $rpNote, (Get-ApplyFailText $res), $script:RebootText),
             'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
         Invoke-HomeCheck -Quiet
     } finally {
@@ -2859,11 +2900,12 @@ function Invoke-HomeBoost {
     }
 }
 
-# «Всё сразу»: проверка → настройки под этот ПК → безопасная чистка → что сделать руками → перезагрузка
+# «Ускорить для игр» (и «Максимальное ускорение» с -Max): проверка → настройки под этот ПК → безопасная чистка → что сделать руками → перезагрузка
 function Invoke-HomeAll {
+    param([switch]$Max)
     Set-HomeProgress 'Шаг 1 из 3: изучаю ваш ПК...'
     try {
-        $boost = Get-HomeBoostPlan
+        $boost = Get-HomeBoostPlan -Max:$Max
         Set-HomeProgress 'Шаг 2 из 3: считаю, что можно почистить...'
         $clean = Get-HomeCleanPlan
         Set-HomeProgress 'Шаг 3 из 3: ищу, что мешает играм...'
@@ -2886,7 +2928,15 @@ function Invoke-HomeAll {
     } catch { } finally { Set-HomeProgress '' }
 
     $parts = New-Object System.Collections.ArrayList
-    if ($recommended.Count) {
+    if ($Max -and $recommended.Count) {
+        # рискованное — отдельным списком и с последствиями, остальное — одной строкой
+        $risky = @($recommended | Where-Object { $_.expert -or [string]$_.risk -ne 'low' })
+        $safe = @($recommended | Where-Object { -not ($_.expert -or [string]$_.risk -ne 'low') })
+        if ($safe.Count) { [void]$parts.Add(('Безопасные настройки под ваш ПК: {0} (всё, что делает «Ускорить», и ещё слабые по эффекту).' -f $safe.Count)) }
+        if ($risky.Count) {
+            [void]$parts.Add(("С риском ({0}) — у некоторых есть цена:`r`n{1}" -f $risky.Count, (($risky | ForEach-Object { $why = if ($_.note) { [string]$_.note } else { [string]$_.effect }; '  • {0}' -f $_.title + $(if ($why) { "`r`n      " + $why } else { '' }) }) -join "`r`n")))
+        }
+    } elseif ($recommended.Count) {
         [void]$parts.Add(("Настройки под ваш ПК ({0}):`r`n{1}" -f $recommended.Count, (($recommended | ForEach-Object { '  • ' + $_.title }) -join "`r`n")))
     } else {
         [void]$parts.Add('Настройки: всё, что подходит вашему ПК, уже включено.')
@@ -2901,9 +2951,11 @@ function Invoke-HomeAll {
         return
     }
 
+    $caption = if ($Max) { 'pckit by odilbek — максимальное ускорение' } else { 'pckit by odilbek — ускорить для игр' }
     $answer = [System.Windows.Forms.MessageBox]::Show(
-        ("Ваш ПК: {0}`r`n`r`n{1}{2}`r`n`r`nПеред изменениями замерю ПК (около 20 секунд) и создам точку восстановления. Настройки отменяются одной кнопкой в «Сделано». Начать?" -f (Format-PckitHardwareLine $boost.Hw), ($parts -join "`r`n`r`n"), (Get-HomeSteamNote $recommended)),
-        'pckit by odilbek — всё сразу', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
+        ("Ваш ПК: {0}`r`n`r`n{1}{2}`r`n`r`nПеред изменениями замерю ПК (около 20 секунд) и создам точку восстановления. Всё отменяется кнопкой «Вернуть как было». Начать?" -f (Format-PckitHardwareLine $boost.Hw), ($parts -join "`r`n`r`n"), (Get-HomeSteamNote $recommended)),
+        $caption, [System.Windows.Forms.MessageBoxButtons]::YesNo, $(if ($Max) { [System.Windows.Forms.MessageBoxIcon]::Warning } else { [System.Windows.Forms.MessageBoxIcon]::Question }),
+        $(if ($Max) { [System.Windows.Forms.MessageBoxDefaultButton]::Button2 } else { [System.Windows.Forms.MessageBoxDefaultButton]::Button1 }))
     if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
 
     Invoke-EnsureBeforeSnapshot -SetText { param($t) Set-HomeProgress $t }
@@ -2971,7 +3023,7 @@ function Invoke-HomeWork {
         return
     }
     $answer = [System.Windows.Forms.MessageBox]::Show(
-        ("Рабочий ПК: {0}`r`n`r`nНашёл программы:`r`n{1}`r`n`r`nНастройки ({2}):`r`n{3}`r`n`r`nЧистка: {4}.`r`n`r`nКрупное и спорное (бэкапы, «Загрузки», кэш OneDrive) НЕ удаляю — в конце покажу списком.`r`nПеред изменениями — замер и точка восстановления; настройки отменяются в «Сделано». Начать?" -f (Format-PckitHardwareLine $hw), $appsText, $todo.Count, $setText, $cleanText),
+        ("Рабочий ПК: {0}`r`n`r`nНашёл программы:`r`n{1}`r`n`r`nНастройки ({2}):`r`n{3}`r`n`r`nЧистка: {4}.`r`n`r`nКрупное и спорное (бэкапы, «Загрузки», кэш OneDrive) НЕ удаляю — в конце покажу списком.`r`nПеред изменениями — замер и точка восстановления; настройки отменяются кнопкой «Вернуть как было». Начать?" -f (Format-PckitHardwareLine $hw), $appsText, $todo.Count, $setText, $cleanText),
         'pckit by odilbek — для работы', [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Question)
     if ($answer -ne [System.Windows.Forms.DialogResult]::Yes) { return }
 
@@ -3289,7 +3341,7 @@ $applyButton.Add_Click({
             if ($risky.Count) {
                 $summary += "`r`n`r`nРискованные шаги:`r`n" + ((@($risky | Select-Object -First 8) | ForEach-Object { '  ! ' + $_.Title }) -join "`r`n")
             }
-            $summary += "`r`n`r`nФайлы, которые будут заменены, сначала уходят в бэкап; изменения записываются в журнал и отменяются на вкладке «Игры» или «Сделано»."
+            $summary += "`r`n`r`nФайлы, которые будут заменены, сначала уходят в бэкап; изменения записываются в журнал и отменяются кнопкой «Вернуть как было» на главной."
             $go = [System.Windows.Forms.MessageBox]::Show($summary, 'pckit by odilbek — применить',
                 [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning,
                 [System.Windows.Forms.MessageBoxDefaultButton]::Button2)
@@ -3404,7 +3456,7 @@ $undoButton.Add_Click({
 
 $doneRefreshButton.Add_Click({ Fill-DoneList })
 $doneUndoButton.Add_Click({ Invoke-DoneUndo })
-# кнопка на вкладке «Игры» раньше не была подключена, хотя на неё ссылается текст после применения
+# кнопка на разделе «Настройки» раньше не была подключена, хотя на неё ссылается текст после применения
 $gameUndoButton.Add_Click({ Invoke-DoneUndo })
 
 $resultBeforeButton.Add_Click({
@@ -3511,7 +3563,7 @@ function Set-StartupChecked {
     Fill-StartupList
     Fill-DoneList
     $verb = if ($Enabled) { 'Включено' } else { 'Отключено' }
-    $text = ('{0}: {1}, ошибок: {2}. Изменения вступят в силу при следующем входе в Windows; отменить — в разделе «Сделано».' -f $verb, $res.Ok, $res.Failed)
+    $text = ('{0}: {1}, ошибок: {2}. Изменения вступят в силу при следующем входе в Windows; отменить — кнопкой «Вернуть как было».' -f $verb, $res.Ok, $res.Failed)
     if ($res.Failed) { $text += "`r`n`r`n" + (@($res.Messages) -join "`r`n") }
     [void][System.Windows.Forms.MessageBox]::Show($text, 'pckit by odilbek', [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
 }
@@ -3816,7 +3868,7 @@ function Invoke-DriverCheck {
         default { [void][System.Windows.Forms.MessageBox]::Show([string]$c.Message, $title, [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information) }
     }
 }
-# куда ведёт замечание: настройка во вкладке «Игры», раздел программы или страница Параметров Windows
+# куда ведёт замечание: настройка во разделе «Настройки», раздел программы или страница Параметров Windows
 function Invoke-HealthFix {
     param($Finding)
     if (-not $Finding) { return }
@@ -4588,7 +4640,7 @@ Set-ListFill -List $resultList -FillIndex 5 -Widths @(200, 120, 120, 80, 135, 0)
 Set-ListFill -List $doneList -FillIndex 2 -Widths @(130, 420, 0)
 Set-ListFill -List $startupList -FillIndex 0 -Widths @(0, 190, 90, 140, 240)
 
-# «Игры»: флажки справа прижимаются к краю, описание занимает остаток (до трёх строк, кнопки ниже)
+# «Настройки»: флажки справа прижимаются к краю, описание занимает остаток (до трёх строк, кнопки ниже)
 $gameLayout.RowStyles[2].Height = 120
 $gameDetails.Height = 56
 $gameDetails.AutoEllipsis = $true

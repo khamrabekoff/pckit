@@ -107,10 +107,21 @@ try {
     $cfg = Join-Path $cfgDir 'autoexec.cfg'
     Assert-That 'cs2cfg: файл создан' ($r.Status -eq 'ok' -and (Test-Path -LiteralPath $cfg))
     Assert-That 'cs2cfg: без BOM' ([IO.File]::ReadAllBytes($cfg)[0] -ne 0xEF)
-    Assert-That 'cs2cfg: откат = удалить созданный файл' (@($j.commands).Count -eq 1 -and $j.commands[0].undo -match '^del ')
+    Assert-That 'cs2cfg: в журнале «файл создал pckit»' (@($j.cs2).Count -eq 1 -and $j.cs2[0].kind -eq 'cfg' -and $j.cs2[0].created)
     $r = Invoke-PckitStepCs2Cfg -Step $step -Journal $j -Run
     Assert-That 'cs2cfg: повторно — «уже так»' ($r.Message -eq 'уже так')
     Assert-That 'cs2cfg: проверка' ((Test-PckitVerifyCs2Cfg -Verify $null).Ok)
+    # пользователь дописал свою строку — откат убирает только блок pckit и не удаляет файл
+    [IO.File]::AppendAllText($cfg, "bind x +jump`r`n")
+    $rr = Restore-PckitJournal -Journal $j -Run
+    $left = [IO.File]::ReadAllText($cfg)
+    Assert-That 'cs2cfg: откат убрал только блок pckit' ($rr.Failed -eq 0 -and $left -match 'bind x \+jump' -and $left -notmatch 'pckit') $left
+    # файл, в котором после отката ничего не осталось, удаляется (его создал pckit)
+    Remove-Item -LiteralPath $cfg -Force
+    $j = New-PckitJournal
+    [void](Invoke-PckitStepCs2Cfg -Step $step -Journal $j -Run)
+    [void](Restore-PckitJournal -Journal $j -Run)
+    Assert-That 'cs2cfg: созданный pckit файл удалён при откате' (-not (Test-Path -LiteralPath $cfg))
 
     # ---------- localconfig.vdf ----------
     $vdf = @"
@@ -155,7 +166,7 @@ try {
     $lo = Get-PckitCs2LaunchOptions
     Assert-That 'vdf: параметр добавлен' ($r.Status -eq 'ok' -and $lo.Value -eq '+exec autoexec') $lo.Value
     Assert-That 'vdf: dota не тронута' ([IO.File]::ReadAllText($vdfFile) -match '"LaunchOptions"\s+"-dota"')
-    Assert-That 'vdf: бэкап в журнале' (@($j.files).Count -eq 1 -and (Test-Path -LiteralPath $j.files[0].backup))
+    Assert-That 'vdf: в журнале только добавленный параметр' (@($j.cs2).Count -eq 1 -and $j.cs2[0].kind -eq 'launch' -and (@($j.cs2[0].added) -join ',') -eq '+exec autoexec' -and -not @($j.files).Count)
     $r = Invoke-PckitStepCs2Launch -Step ([pscustomobject]@{ add = @('+exec autoexec', '-novid') }) -Journal $j -Run
     Assert-That 'vdf: дописано к существующему' ((Get-PckitCs2LaunchOptions).Value -eq '+exec autoexec -novid')
     # значения с кавычками и обратным слэшем переживают запись/чтение
@@ -167,9 +178,20 @@ try {
     [IO.File]::WriteAllText($vdfFile, $txt.Substring(0, $vt.Start) + (ConvertTo-PckitVdfString $tricky) + $txt.Substring($vt.End), (New-Object System.Text.UTF8Encoding($false)))
     Assert-That 'vdf: экранирование кавычек и \' ((Get-PckitCs2LaunchOptions).Value -eq $tricky) (Get-PckitCs2LaunchOptions).Value
     Assert-That 'merge: без дублей' ((Merge-PckitLaunchOptions -Current '-novid +exec autoexec' -Add @('+exec autoexec')) -eq '-novid +exec autoexec')
-    # откат файлов возвращает исходник
+    # пользователь сам добавил свой параметр — откат убирает только параметры pckit
+    $txt = [IO.File]::ReadAllText($vdfFile)
+    $tok = Get-PckitVdfTokens -Text $txt
+    $vt = Find-PckitVdfValue -Tokens $tok -Block (Find-PckitVdfBlock -Tokens $tok -Path $script:PckitCs2AppPath) -Key 'LaunchOptions'
+    [IO.File]::WriteAllText($vdfFile, $txt.Substring(0, $vt.Start) + (ConvertTo-PckitVdfString '-mine +exec autoexec -novid') + $txt.Substring($vt.End), (New-Object System.Text.UTF8Encoding($false)))
+    # Steam открыт — откат не трогает файл (Steam перезаписал бы его) и остаётся в журнале
+    function Get-Process { [pscustomobject]@{ Name = 'steam' } }
     $rr = Restore-PckitJournal -Journal $j -Run
-    Assert-That 'vdf: откат вернул исходный файл' ($rr.Failed -eq 0 -and [IO.File]::ReadAllText($vdfFile) -eq $vdf)
+    Assert-That 'vdf: при открытом Steam откат ждёт' ($rr.Failed -eq 2 -and (Get-PckitCs2LaunchOptions).Value -eq '-mine +exec autoexec -novid')
+    function Get-Process { }
+    $rr = Restore-PckitJournal -Journal (Read-PckitJournal) -Run
+    Assert-That 'vdf: откат убрал только параметры pckit' ($rr.Failed -eq 0 -and (Get-PckitCs2LaunchOptions).Value -eq '-mine') (Get-PckitCs2LaunchOptions).Value
+    Assert-That 'vdf: после отката dota не тронута' ([IO.File]::ReadAllText($vdfFile) -match '"LaunchOptions"\s+"-dota"')
+    Assert-That 'vdf: журнал пуст после удачного отката' (Test-PckitJournalEmpty -Journal (Read-PckitJournal))
     Remove-Item Function:\Get-Process
 
     # ---------- откат только последней партии (-Since) ----------

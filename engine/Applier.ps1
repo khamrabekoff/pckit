@@ -71,7 +71,7 @@ function Invoke-PckitStep {
 
     # куда профиль просит писать — проверяем до любых действий (чужой профиль не должен трогать C:\Windows или корень профиля пользователя)
     if ($Step.Action -in 'copy', 'copyfile' -and $Step.Meta.Target) {
-        $guard = Test-PckitSafePath -Path ([string]$Step.Meta.Target)
+        $guard = Test-PckitRestoreTarget -Path ([string]$Step.Meta.Target)
         if (-not $guard.Safe) {
             $result.Status = 'fail'
             $result.Msg = ('отказ: {0} ({1})' -f $guard.Reason, $Step.Meta.Target)
@@ -130,6 +130,8 @@ function Invoke-PckitStep {
             if (-not $payloadPath -or -not (Test-Path -LiteralPath $payloadPath)) {
                 $result.Status = 'fail'; $result.Msg = 'нет файла реестра'; break
             }
+            $scope = Test-PckitRegFileScope -Path $payloadPath -Key ([string]$Step.Meta.Key)
+            if (-not $scope.Safe) { $result.Status = 'fail'; $result.Msg = ('отказ: {0}' -f $scope.Reason); break }
             if (-not $Run) { $result.Status = 'dry'; $result.Msg = ('импорт {0}' -f $Step.Meta.Key); break }
             $regBackupDir = Join-Path $BackupRoot 'registry'
             New-Item -ItemType Directory -Force -Path $regBackupDir | Out-Null
@@ -174,7 +176,9 @@ function Invoke-PckitStep {
             $vars = $Step.Meta.vars
             if (-not $Run) { $result.Status = 'dry'; $result.Msg = ('переменных: {0}' -f $vars.PSObject.Properties.Count); break }
             $set = 0
+            $denied = @()
             foreach ($p in $vars.PSObject.Properties) {
+                if (-not (Test-PckitEnvAllowed -Name $p.Name)) { $denied += $p.Name; continue }
                 $current = [Environment]::GetEnvironmentVariable($p.Name, 'User')
                 if (-not $current) {
                     [Environment]::SetEnvironmentVariable($p.Name, [string]$p.Value, 'User')
@@ -182,7 +186,7 @@ function Invoke-PckitStep {
                 }
             }
             $result.Status = 'ok'
-            $result.Msg = ('добавлено: {0}' -f $set)
+            $result.Msg = ('добавлено: {0}' -f $set) + $(if ($denied.Count) { ('; не переношу (небезопасно): {0}' -f ($denied -join ', ')) } else { '' })
         }
         'timezone' {
             if (-not $Run) { $result.Status = 'dry'; $result.Msg = ('Set-TimeZone ' + $Step.Meta.id); break }

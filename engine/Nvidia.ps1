@@ -361,7 +361,7 @@ function Restore-PckitNvidiaJournal {
                 } catch { $status = 'fail'; $msg = $_.Exception.Message }
             }
         }
-        [void]$result.Add([pscustomobject]@{ Kind = 'видеокарта'; Title = $title; Status = $status; Message = $msg })
+        [void]$result.Add([pscustomobject]@{ Kind = 'видеокарта'; Title = $title; Status = $status; Message = $msg; Entry = $e })
     }
     return $result.ToArray()
 }
